@@ -54,7 +54,11 @@ int NAME (unsigned size, unsigned * restrict mask, int mask_summary,
         for (unsigned i = size&(-4UL); i < size; i++) {
                 if (!(mask[i]^flip)) continue;
                 double vx = x[i], vy = y[i];
+#ifndef SCALAR_OP
                 dst[i] = OP(vx, vy);
+#else
+                dst[i] = SCALAR_OP(vx, vy);
+#endif
         }
 
         return 0;

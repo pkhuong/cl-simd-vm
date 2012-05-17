@@ -59,10 +59,13 @@ int NAME (unsigned size, unsigned * restrict mask, int mask_summary,
                 unsigned r = 0;
                 if (mask[i]^flip) {
                         unsigned vx = x[i], vy = y[i];
-#ifdef PREDICATE
-                        r = OP(vx, vy)?-1U:0;
-#else
+#ifndef SCALAR_OP
                         r = OP(vx, vy);
+#else
+                        r = SCALAR_OP(vx, vy);
+#endif
+#ifdef PREDICATE
+                        r = r?-1U:0;
 #endif
                 }
 #ifdef PREDICATE
