@@ -2,13 +2,22 @@
   (:use)
   (:export "SUMMARISE" "CANONICALISE-MASK" "COMPLEMENT-MASK"
            "MERGE-DOUBLE" "MERGE-UNSIGNED"
+
            "DOUBLE-NEG" "DOUBLE-INV"
            "DOUBLE+" "DOUBLE-" "DOUBLE*" "DOUBLE/"
            "DOUBLE=" "DOUBLE/=" "DOUBLE<" "DOUBLE<=" "DOUBLE>" "DOUBLE>="
+           "DOUBLE-MAX" "DOUBLE-MIN"
+           
+           "DOUBLE/+" "DOUBLE/*" "DOUBLE/MAX" "DOUBLE/MIN"
+           
            "UNSIGNED-NEG" "UNSIGNED-COMPLEMENT"
            "UNSIGNED+" "UNSIGNED-" "UNSIGNED*" "UNSIGNED/" "UNSIGNED%"
            "UNSIGNED=" "UNSIGNED/=" "UNSIGNED<" "UNSIGNED<=" "UNSIGNED>" "UNSIGNED>="
-           "UNSIGNED-AND" "UNSIGNED-OR" "UNSIGNED-XOR"))
+           "UNSIGNED-AND" "UNSIGNED-OR" "UNSIGNED-XOR"
+           "UNSIGNED-MAX" "UNSIGNED-MIN"
+           
+           "UNSIGNED/+" "UNSIGNED/*" "UNSIGNED/OR" "UNSIGNED/AND" "UNSIGNED/XOR"
+           "UNSIGNED/MAX" "UNSIGNED/MIN"))
 
 (defpackage "BSP.VM-OP.IMPL"
   (:use "CL" "SB-ALIEN"))
@@ -185,7 +194,11 @@
                                        for-mask-p
                                        dst src)))))))
   (def bsp.vm-op:double-neg neg-double)
-  (def bsp.vm-op:double-inv inv-double))
+  (def bsp.vm-op:double-inv inv-double)
+  (def bsp.vm-op:double/+   reduce-add-double)
+  (def bsp.vm-op:double/*   reduce-mul-double)
+  (def bsp.vm-op:double/max reduce-max-double)
+  (def bsp.vm-op:double/min reduce-min-double))
 
 (macrolet ((def (vm-name alien-name)
              `(progn
@@ -220,7 +233,9 @@
   (def bsp.vm-op:double+ add-double)
   (def bsp.vm-op:double- sub-double)
   (def bsp.vm-op:double* mul-double)
-  (def bsp.vm-op:double/ div-double))
+  (def bsp.vm-op:double/ div-double)
+  (def bsp.vm-op:double-max max-double)
+  (def bsp.vm-op:double-min min-double))
 
 (macrolet ((def (vm-name alien-name)
              `(progn
@@ -287,7 +302,14 @@
                                        dst src)))))))
   (def bsp.vm-op:unsigned-neg neg-unsigned)
   (def bsp.vm-op:unsigned-complement complement-unsigned)
-  (def bsp.vm-op:complement-mask complement-mask))
+  (def bsp.vm-op:complement-mask complement-mask)
+  (def bsp.vm-op:unsigned/+   reduce-add-unsigned)
+  (def bsp.vm-op:unsigned/*   reduce-mul-unsigned)
+  (def bsp.vm-op:unsigned/or  reduce-or-unsigned)
+  (def bsp.vm-op:unsigned/and reduce-and-unsigned)
+  (def bsp.vm-op:unsigned/xor reduce-xor-unsigned)
+  (def bsp.vm-op:unsigned/max reduce-max-unsigned)
+  (def bsp.vm-op:unsigned/min reduce-min-unsigned))
 
 (macrolet ((def (vm-name alien-name)
              `(progn
@@ -334,4 +356,7 @@
   
   (def bsp.vm-op:unsigned-and and-unsigned)
   (def bsp.vm-op:unsigned-or  or-unsigned)
-  (def bsp.vm-op:unsigned-xor xor-unsigned))
+  (def bsp.vm-op:unsigned-xor xor-unsigned)
+
+  (def bsp.vm-op:unsigned-max max-unsigned)
+  (def bsp.vm-op:unsigned-min min-unsigned))
