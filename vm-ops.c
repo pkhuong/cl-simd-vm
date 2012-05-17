@@ -1,6 +1,7 @@
 #include <assert.h>
 #include <string.h>
 #include <strings.h>
+#include <math.h>
 
 typedef unsigned long v2ul __attribute__ ((ext_vector_type (2)));
 typedef unsigned v4u __attribute__ ((ext_vector_type (4)));
@@ -440,5 +441,53 @@ int complement_mask (unsigned size, unsigned * restrict mask, int mask_summary,
 #define PREDICATE
 #include "binary-unsigned-op.inc"
 #undef  PREDICATE
+#undef OP
+#undef NAME
+
+#define NAME reduce_add_double
+#define OP(X, Y) ((X)+(Y))
+#define NEUTRAL 0.0
+#include "unary-double-reduce.inc"
+#undef NEUTRAL
+#undef OP
+#undef NAME
+
+#define NAME reduce_mul_double
+#define OP(X, Y) ((X)*(Y))
+#define NEUTRAL 1.0
+#include "unary-double-reduce.inc"
+#undef NEUTRAL
+#undef OP
+#undef NAME
+
+#define NAME reduce_add_unsigned
+#define OP(X, Y) ((X)+(Y))
+#define NEUTRAL 0
+#include "unary-unsigned-reduce.inc"
+#undef NEUTRAL
+#undef OP
+#undef NAME
+
+#define NAME reduce_mul_unsigned
+#define OP(X, Y) ((X)*(Y))
+#define NEUTRAL 1
+#include "unary-unsigned-reduce.inc"
+#undef NEUTRAL
+#undef OP
+#undef NAME
+
+#define NAME reduce_or_unsigned
+#define OP(X, Y) ((X)|(Y))
+#define NEUTRAL 0
+#include "unary-unsigned-reduce.inc"
+#undef NEUTRAL
+#undef OP
+#undef NAME
+
+#define NAME reduce_and_unsigned
+#define OP(X, Y) ((X)&(Y))
+#define NEUTRAL -1U
+#include "unary-unsigned-reduce.inc"
+#undef NEUTRAL
 #undef OP
 #undef NAME
