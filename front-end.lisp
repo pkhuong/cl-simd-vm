@@ -49,7 +49,7 @@
                                collect `(,var (car ,gensym)))
          ,@body))))
 
-(defvar *default-chunk-size* 128)
+(defvar *default-chunk-size* 1024)
 
 (defclass bsp-context ()
   ((count  :initarg :count :reader count-of)
@@ -137,7 +137,6 @@
                   (coerce roots 'simple-vector)
                   (coerce reducers 'simple-vector)
                   (coerce thunks 'simple-vector))))
-    (break "bblock ~A~%" bblock)
     (setf (thunks-of context)
           (make-array (* 2 (length thunks))
                       :adjustable t :fill-pointer 0))
@@ -209,60 +208,65 @@
   (def vmin bsp.vm-op:unsigned-min bsp.vm-op:double-min))
 
 (macrolet ((def (name op (unsigned-op unsigned-neutral)
-                         (&optional double-op double-neutral))
-             `(defun ,name (x)
-                (declare (type bsp-vector x))
-                (let ((eltype (eltype-of x)))
-                  (cond ,@(and unsigned-op
-                               `(((equal eltype '(unsigned-byte 32))
-                                  (bsp.compiler:make-reducer
-                                   (vector x)
-                                   eltype
-                                   ,unsigned-neutral
-                                   ',unsigned-op
-                                   (sb-int:named-lambda unsigned-2arg (chunk x y)
-                                     (declare (type (and fixnum (integer 4)) chunk)
-                                              (type (simple-array (unsigned-byte 32) 1)
-                                                    x y)
-                                              (ignore chunk))
-                                     (dotimes (i 4 x)
-                                       (setf (aref x i) (,op (aref x i) (aref y i)))))
-                                   (sb-int:named-lambda unsigned-1arg (chunk x)
-                                     (declare (type (and fixnum (integer 4)) chunk)
-                                              (type (simple-array (unsigned-byte 32) 1)
-                                                    x)
-                                              (ignore chunk))
-                                     (let ((acc (aref x 0)))
-                                       (declare (type (unsigned-byte 32) acc))
-                                       (loop for i from 1 below 4 do
-                                         (setf acc (,op acc (aref x i))))
-                                       acc))))))
-                        ,@(and double-op
-                               `(((equal eltype 'double-float)
-                                  (bsp.compiler:make-reducer
-                                   (vector x)
-                                   eltype
-                                   ,double-neutral
-                                   ',double-op
-                                   (sb-int:named-lambda unsigned-2arg (chunk x y)
-                                     (declare (type (and fixnum (integer 4)) chunk)
-                                              (type (simple-array double-float 1)
-                                                    x y)
-                                              (ignore chunk))
-                                     (dotimes (i 4 x)
-                                       (setf (aref x i) (,op (aref x i) (aref y i)))))
-                                   (sb-int:named-lambda unsigned-1arg (chunk x)
-                                     (declare (type (and fixnum (integer 4)) chunk)
-                                              (type (simple-array double-float 1)
-                                                    x)
-                                              (ignore chunk))
-                                     (let ((acc (aref x 0)))
-                                       (declare (type double-float acc))
-                                       (loop for i from 1 below 4 do
-                                         (setf acc (,op acc (aref x i))))
-                                       acc))))))
-                        (t
-                         (error "Don't know how to ~S vectors of ~S" ',name eltype)))))))
+                         (&optional double-op double-neutral)
+                 &aux (%name (intern (format nil "%~A" name))))
+             `(progn
+                (defun ,%name (x)
+                  (declare (type bsp-vector x))
+                  (let ((eltype (eltype-of x)))
+                    (cond ,@(and unsigned-op
+                                 `(((equal eltype '(unsigned-byte 32))
+                                    (bsp.compiler:make-reducer
+                                     (vector x)
+                                     eltype
+                                     ,unsigned-neutral
+                                     ',unsigned-op
+                                     (sb-int:named-lambda unsigned-2arg (chunk x y)
+                                       (declare (type (and fixnum (integer 4)) chunk)
+                                                (type (simple-array (unsigned-byte 32) 1)
+                                                      x y)
+                                                (ignore chunk))
+                                       (dotimes (i 4 x)
+                                         (setf (aref x i) (,op (aref x i) (aref y i)))))
+                                     (sb-int:named-lambda unsigned-1arg (chunk x)
+                                       (declare (type (and fixnum (integer 4)) chunk)
+                                                (type (simple-array (unsigned-byte 32) 1)
+                                                      x)
+                                                (ignore chunk))
+                                       (let ((acc (aref x 0)))
+                                         (declare (type (unsigned-byte 32) acc))
+                                         (loop for i from 1 below 4 do
+                                           (setf acc (,op acc (aref x i))))
+                                         acc))))))
+                          ,@(and double-op
+                                 `(((equal eltype 'double-float)
+                                    (bsp.compiler:make-reducer
+                                     (vector x)
+                                     eltype
+                                     ,double-neutral
+                                     ',double-op
+                                     (sb-int:named-lambda unsigned-2arg (chunk x y)
+                                       (declare (type (and fixnum (integer 4)) chunk)
+                                                (type (simple-array double-float 1)
+                                                      x y)
+                                                (ignore chunk))
+                                       (dotimes (i 4 x)
+                                         (setf (aref x i) (,op (aref x i) (aref y i)))))
+                                     (sb-int:named-lambda unsigned-1arg (chunk x)
+                                       (declare (type (and fixnum (integer 4)) chunk)
+                                                (type (simple-array double-float 1)
+                                                      x)
+                                                (ignore chunk))
+                                       (let ((acc (aref x 0)))
+                                         (declare (type double-float acc))
+                                         (loop for i from 1 below 4 do
+                                           (setf acc (,op acc (aref x i))))
+                                         acc))))))
+                          (t
+                           (error "Don't know how to ~S vectors of ~S" ',name eltype)))))
+                (defun ,name (x)
+                  (declare (type bsp-vector x))
+                  (aref (%barrier *context* nil (vector (,%name x))) 0)))))
   (def v/+ + (bsp.vm-op:unsigned/+ 0) (bsp.vm-op:double/+ 0d0))
   (def v/* * (bsp.vm-op:unsigned/* 1) (bsp.vm-op:double/* 1d0))
   (def v/min min (bsp.vm-op:unsigned/min (ldb (byte 32 0) -1))
@@ -273,20 +277,20 @@
   (def v/and logand (bsp.vm-op:unsigned/and 0) ())
   (def v/xor logxor (bsp.vm-op:unsigned/xor 0) ()))
 
-(defparameter *a* (make-array 1000
+(defparameter *a* (make-array 1000000
                               :element-type 'double-float
                               :initial-element 10d0))
 
-(defparameter *b* (make-array 1000
+(defparameter *b* (make-array 1000000
                               :element-type 'double-float
                               :initial-element 3d0))
 
-(defparameter *c* (map-into (make-array 1000
+(defparameter *c* (map-into (make-array 1000000
                                         :element-type '(unsigned-byte 32))
                             (lambda ()
                               (ldb (byte 32 0) (- (random 2))))))
 
-(defparameter *d* (map-into (make-array 1000
+(defparameter *d* (map-into (make-array 1000000
                                         :element-type '(unsigned-byte 32))
                             (lambda ()
                               (ldb (byte 32 0) (- (random 2))))))
