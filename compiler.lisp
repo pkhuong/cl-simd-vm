@@ -69,7 +69,8 @@
   (when (and (typep root 'bsp.front:bsp-vector)
              (bsp.front:data-of root))
     (return-from mark-live))
-  (setf (gethash root *live-vars*) t)
+  (when (typep root 'bsp.front:bsp-vector)
+    (setf (gethash root *live-vars*) t))
   (multiple-value-bind (mask args)
       (etypecase root
         (bsp.front:bsp-vector
@@ -214,7 +215,7 @@
                  (var-vm-var x)
                  x))
            (concatenate 'simple-vector
-                        (vector mask flip-p rvar)
+                        (vector mask flip-p nil rvar)
                         (reducer-args reducer))))
      *vm-ops*)
     (setf (gethash reducer *reducer-vm-reducer*) rvar)))
