@@ -24,7 +24,11 @@ int NAME (unsigned size, unsigned * restrict mask, int mask_summary,
                         for (unsigned i = size&(-2UL); i < size; i++) {
                                 if (!(mask[i]^flip)) continue;
                                 double x = src[i];
+#ifndef SCALAR_OP
                                 acc = OP(acc, x);
+#else
+                                acc = SCALAR_OP(acc, x);
+#endif
                         }
                         *dst = acc;
                 }
@@ -64,7 +68,11 @@ int NAME (unsigned size, unsigned * restrict mask, int mask_summary,
                 for (unsigned i = size&(-3UL); i < size; i++) {
                         if (!(mask[i]^flip)) continue;
                         double x = src[i];
+#ifndef SCALAR_OP
                         acc = OP(acc, x);
+#else
+                        acc = SCALAR_OP(acc, x);
+#endif
                 }
                 *dst = acc;
         }

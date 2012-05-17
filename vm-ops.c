@@ -460,6 +460,28 @@ int complement_mask (unsigned size, unsigned * restrict mask, int mask_summary,
 #undef OP
 #undef NAME
 
+#define NAME reduce_max_double
+#define OP(X, Y) ({ v2ul mask = (v2ul)((X)>(Y));                \
+                        (v2d)(((v2ul)(X)&mask)|((v2ul)(Y)&(~mask)));})
+#define SCALAR_OP(X, Y) ((X)>(Y)? (X) : (Y))
+#define NEUTRAL -HUGE_VAL
+#include "unary-double-reduce.inc"
+#undef NEUTRAL
+#undef SCALAR_OP
+#undef OP
+#undef NAME
+
+#define NAME reduce_min_double
+#define OP(X, Y) ({ v2ul mask = (v2ul)((X)<(Y));                \
+                        (v2d)(((v2ul)(X)&mask)|((v2ul)(Y)&(~mask)));})
+#define SCALAR_OP(X, Y) ((X)<(Y)? (X) : (Y))
+#define NEUTRAL -HUGE_VAL
+#include "unary-double-reduce.inc"
+#undef NEUTRAL
+#undef SCALAR_OP
+#undef OP
+#undef NAME
+
 #define NAME reduce_add_unsigned
 #define OP(X, Y) ((X)+(Y))
 #define NEUTRAL 0
@@ -489,5 +511,27 @@ int complement_mask (unsigned size, unsigned * restrict mask, int mask_summary,
 #define NEUTRAL -1U
 #include "unary-unsigned-reduce.inc"
 #undef NEUTRAL
+#undef OP
+#undef NAME
+
+#define NAME reduce_max_unsigned
+#define OP(X, Y) ({ v4u mask = (v4u)((X) > (Y));        \
+                        ((X)&mask)|((Y)&(~mask));})
+#define SCALAR_OP(X, Y) ((X)>(Y)? (X) : (Y))
+#define NEUTRAL -HUGE_VAL
+#include "unary-unsigned-reduce.inc"
+#undef NEUTRAL
+#undef SCALAR_OP
+#undef OP
+#undef NAME
+
+#define NAME reduce_min_unsigned
+#define OP(X, Y) ({ v4u mask = (v4u)((X) < (Y));        \
+                        ((X)&mask)|((Y)&(~mask));})
+#define SCALAR_OP(X, Y) ((X)<(Y)? (X) : (Y))
+#define NEUTRAL -HUGE_VAL
+#include "unary-unsigned-reduce.inc"
+#undef NEUTRAL
+#undef SCALAR_OP
 #undef OP
 #undef NAME
