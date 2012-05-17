@@ -518,7 +518,7 @@ int complement_mask (unsigned size, unsigned * restrict mask, int mask_summary,
 #define OP(X, Y) ({ v4u mask = (v4u)((X) > (Y));        \
                         ((X)&mask)|((Y)&(~mask));})
 #define SCALAR_OP(X, Y) ((X)>(Y)? (X) : (Y))
-#define NEUTRAL -HUGE_VAL
+#define NEUTRAL 0
 #include "unary-unsigned-reduce.inc"
 #undef NEUTRAL
 #undef SCALAR_OP
@@ -529,7 +529,7 @@ int complement_mask (unsigned size, unsigned * restrict mask, int mask_summary,
 #define OP(X, Y) ({ v4u mask = (v4u)((X) < (Y));        \
                         ((X)&mask)|((Y)&(~mask));})
 #define SCALAR_OP(X, Y) ((X)<(Y)? (X) : (Y))
-#define NEUTRAL -HUGE_VAL
+#define NEUTRAL -1U
 #include "unary-unsigned-reduce.inc"
 #undef NEUTRAL
 #undef SCALAR_OP
