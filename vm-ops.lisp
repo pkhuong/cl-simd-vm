@@ -52,12 +52,13 @@
          (let ,(loop for (v nil . rest) in bindings
                      for  g  in gensyms
                      collect `(,v (sb-sys:sap+ (sb-sys:vector-sap ,g)
-                                               ,(if rest
-                                                    `(* ,(or (first  rest) 0)
-                                                        ,(ecase (second rest)
-                                                           (unsigned 4)
-                                                           (double   8)))
-                                                    0))))
+                                               (sb-ext:truly-the index
+                                                    ,(if rest
+                                                         `(* ,(or (first  rest) 0)
+                                                             ,(ecase (second rest)
+                                                                (unsigned 4)
+                                                                (double   8)))
+                                                         0)))))
            ,@body)))))
 
 (declaim (inline summarise))
@@ -68,7 +69,8 @@
 (defun bsp.vm-op:summarise (vectors summaries size index start)
   (declare (type vectors   vectors)
            (type summaries summaries)
-           (type index     size index start))
+           (type index     size index start)
+           (optimize speed))
   (with-array-saps ((vec (aref vectors index) start unsigned))
     (setf (aref summaries index)
           (summarise size vec)))
@@ -90,7 +92,8 @@
   (declare (type vectors   vectors)
            (type summaries summaries)
            (type index     size mask-idx mask-start
-                           dst-idx dst-start src-idx src-start))
+                           dst-idx dst-start src-idx src-start)
+           (optimize speed))
   (with-array-saps ((mask (aref vectors mask-idx) mask-start unsigned)
                     (dst  (aref vectors dst-idx)  dst-start  unsigned)
                     (src  (aref vectors src-idx)  src-start  unsigned))
@@ -122,10 +125,11 @@
            (type summaries summaries)
            (type index     size mask-idx mask-start
                            dst-idx dst-start select-idx select-start
-                           x-idx x-start y-idx y-start))
+                           x-idx x-start y-idx y-start)
+           (optimize speed))
   (with-array-saps ((mask (aref vectors mask-idx) mask-start unsigned)
-                    (select (aref vectors select-idx) select-start unsigned)
                     (dst  (aref vectors dst-idx)  dst-start  double)
+                    (select (aref vectors select-idx) select-start unsigned)
                     (x    (aref vectors x-idx)  x-start  double)
                     (y    (aref vectors y-idx)  y-start  double))
     (setf (aref summaries dst-idx)
@@ -155,7 +159,8 @@
            (type summaries summaries)
            (type index     size mask-idx mask-start
                            dst-idx dst-start select-idx select-start
-                           x-idx x-start y-idx y-start))
+                           x-idx x-start y-idx y-start)
+           (optimize speed))
   (with-array-saps ((mask (aref vectors mask-idx) mask-start unsigned)
                     (select (aref vectors select-idx) select-start unsigned)
                     (dst  (aref vectors dst-idx)  dst-start  unsigned)
@@ -184,7 +189,8 @@
                   (declare (type vectors   vectors)
                            (type summaries summaries)
                            (type index     size mask-idx mask-start
-                                 dst-idx dst-start src-idx src-start))
+                                 dst-idx dst-start src-idx src-start)
+                           (optimize speed))
                   (with-array-saps ((mask (aref vectors mask-idx) mask-start unsigned)
                                     (dst  (aref vectors dst-idx)  dst-start  double)
                                     (src  (aref vectors src-idx)  src-start  double))
@@ -220,7 +226,8 @@
                            (type summaries summaries)
                            (type index     size mask-idx mask-start
                                  dst-idx dst-start
-                                 x-idx x-start y-idx y-start))
+                                 x-idx x-start y-idx y-start)
+                           (optimize speed))
                   (with-array-saps ((mask (aref vectors mask-idx) mask-start unsigned)
                                     (dst  (aref vectors dst-idx)  dst-start  double)
                                     (x    (aref vectors x-idx)    x-start    double)
@@ -257,7 +264,8 @@
                            (type summaries summaries)
                            (type index     size mask-idx mask-start
                                  dst-idx dst-start
-                                 x-idx x-start y-idx y-start))
+                                 x-idx x-start y-idx y-start)
+                           (optimize speed))
                   (with-array-saps ((mask (aref vectors mask-idx) mask-start unsigned)
                                     (dst  (aref vectors dst-idx)  dst-start  unsigned)
                                     (x    (aref vectors x-idx)    x-start    double)
@@ -291,7 +299,8 @@
                   (declare (type vectors   vectors)
                            (type summaries summaries)
                            (type index     size mask-idx mask-start
-                                 dst-idx dst-start src-idx src-start))
+                                 dst-idx dst-start src-idx src-start)
+                           (optimize speed))
                   (with-array-saps ((mask (aref vectors mask-idx) mask-start unsigned)
                                     (dst  (aref vectors dst-idx)  dst-start  unsigned)
                                     (src  (aref vectors src-idx)  src-start  unsigned))
@@ -331,7 +340,8 @@
                            (type summaries summaries)
                            (type index     size mask-idx mask-start
                                  dst-idx dst-start
-                                 x-idx x-start y-idx y-start))
+                                 x-idx x-start y-idx y-start)
+                           (optimize speed))
                   (with-array-saps ((mask (aref vectors mask-idx) mask-start unsigned)
                                     (dst  (aref vectors dst-idx)  dst-start  unsigned)
                                     (x    (aref vectors x-idx)    x-start    unsigned)

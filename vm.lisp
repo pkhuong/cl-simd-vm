@@ -77,15 +77,18 @@
                            :type      simple-vector))
 (declaim (sb-ext:freeze-type op))
 
+(declaim (inline execute-op))
 (defun execute-op (op vectors summaries chunk-start chunk-size)
   (declare (type op op)
            (type simple-vector vectors)
            (type (simple-array fixnum 1) summaries)
            (type index chunk-start)
-           (type index chunk-size))
+           (type index chunk-size)
+           (optimize speed))
   (let ((fun  (op-fun op))
         (args (op-args op)))
     (macrolet ((emit-call (n)
+                 (declare (optimize (speed 0)))
                  `(multiple-value-call fun
                     vectors summaries chunk-size
                     ,@(loop for i below n collect
@@ -97,6 +100,7 @@
                                              (lvar 0)))
                                    arg)))))
                (emit-calls (max &body default)
+                 (declare (optimize (speed 0)))
                  `(typecase args
                     ,@(loop for i upto max collect
                             `((simple-array t (,i)) (emit-call ,i)))
@@ -109,7 +113,8 @@
                       and collect (etypecase arg
                                     (gvar chunk-start)
                                     (lvar 0))
-                    else collect arg))))))
+                    else collect arg))))
+    nil))
 
 (defstruct (bblock
             (:constructor make-bblock (count chunk vars ops reduced
@@ -218,11 +223,13 @@
                       (aref accumulator (rvar-loc rvar))))
            (bblock-reduced bblock)))))
 
+(declaim (inline execute-one-chunk))
 (defun execute-one-chunk (ops vectors summaries chunk-start chunk-size)
   (declare (type (simple-array op 1) ops)
            (type (simple-array (simple-array * 1) 1) vectors)
            (type (simple-array fixnum 1) summaries)
-           (type index chunk-start chunk-size))
+           (type index chunk-start chunk-size)
+           (optimize speed))
   (map nil (lambda (op)
              (execute-op op vectors summaries chunk-start chunk-size))
        ops))
