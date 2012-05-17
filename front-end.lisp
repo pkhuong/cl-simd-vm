@@ -87,11 +87,24 @@
 
 (defun vmerge (condition x y)
   (assert (equal (eltype-of x) (eltype-of y)))
-  (make-thunk (eltype-of x)
-              'bsp.vm-op:merge
-              condition x y))
+  (assert (equal (eltype-of condition) '(unsigned-byte 32)))
+  (let ((type (eltype-of x)))
+    (cond ((equal type '(unsigned-byte 32))
+           (make-thunk type 'bsp.vm-op:merge-unsigned
+                       condition x y))
+          ((eql   type 'double-float)
+           (make-thunk type 'bsp.vm-op:merge-double
+                       condition x y))
+          (t (error "Don't know how to ~S vectors of ~S" 'vmerge type)))))
+
+(defun vcomplement (condition)
+  (assert (equal (eltype-of condition) '(unsigned-byte 32)))
+  (make-thunk '(unsigned-byte 32)
+              'bsp.vm-op:complement-mask
+              condition))
 
 (defun call-with-mask (condition then-thunk else-thunk)
+  (assert (equal (eltype-of condition) '(unsigned-byte 32)))
   (unless (typep condition 'bsp-vector)
     (return-from call-with-mask (funcall (if condition then-thunk else-thunk))))
   (assert (has-root *mask-stack* (mask-stack-of condition)))
@@ -104,9 +117,7 @@
         (else
           (let ((*mask-stack* (cons (if (null *mask-stack*)
                                         `(not ,condition)
-                                        (make-thunk '(unsigned-byte 32)
-                                                    'bsp.vm-op:complement-mask
-                                                    condition))
+                                        (vcomplement condition))
                                     *mask-stack*)))
             (multiple-value-list (funcall else-thunk)))))
     (values-list (mapcar (lambda (then else)
@@ -133,6 +144,68 @@
     (values (bsp.vm:execute-bblock bblock)
             (coerce new-roots 'simple-vector))))
 
+(macrolet ((def (name (&optional binary-double unary-double)
+                      (&optional binary-unsigned unary-unsigned))
+             `(defun ,name (x ,@(and (or unary-double unary-unsigned) '(&optional)) y)
+                (declare (type bsp-vector x)
+                         (type (or ,@(and (or unary-double unary-unsigned) '(null)) bsp-vector)
+                               y))
+                (when (and x y)
+                  (assert (equal (eltype-of x) (eltype-of y))))
+                (let ((eltype (eltype-of x)))
+                  (if y
+                      (cond ,@(and binary-double
+                                   `(((equal eltype 'double-float)
+                                      (make-thunk eltype ',binary-double x y))))
+                            ,@(and binary-unsigned
+                                   `(((equal eltype '(unsigned-byte 32))
+                                      (make-thunk eltype ',binary-unsigned x y))))
+                            (t (error "Don't know how to ~S vectors of ~S" ',name eltype)))
+                      (cond ,@(and unary-double
+                                   `(((equal eltype 'double-float)
+                                      ,(if (eql unary-double 'identity)
+                                           'x
+                                           `(make-thunk eltype ',unary-double x)))))
+                            ,@(and unary-unsigned
+                                   `(((equal eltype '(unsigned-byte 32))
+                                      ,(if (eql unary-unsigned 'identity)
+                                           'x
+                                           `(make-thunk eltype ',unary-unsigned x)))))
+                            (t (error "Don't know how to ~S a vector of ~S" ',name eltype))))))))
+  (def v+ (bsp.vm-op:double+ identity)             (bsp.vm-op:unsigned+ identity))
+  (def v- (bsp.vm-op:double- bsp.vm-op:double-neg) (bsp.vm-op:unsigned- bsp.vm-op:unsigned-neg))
+  (def v* (bsp.vm-op:double* identity)             (bsp.vm-op:unsigned* identity))
+  (def v/ (bsp.vm-op:double/ bsp.vm-op:double-inv) (bsp.vm-op:unsigned/))
+  (def v% () (bsp.vm-op:unsigned%)))
+
+(defun v~ (x)
+  (declare (type bsp-vector x))
+  (assert (equal (eltype-of x) '(unsigned-byte 32)))
+  (make-thunk '(unsigned-byte 32) 'bsp.vm-op:unsigned-complement x))
+
+(macrolet ((def (name unsigned-op &optional double-op)
+             `(defun ,name (x y)
+                (declare (type bsp-vector x y))
+                (assert (equal (eltype-of x) (eltype-of y)))
+                (let ((eltype (eltype-of x)))
+                  (cond ,@(and unsigned-op
+                               `(((equal eltype '(unsigned-byte 32))
+                                  (make-thunk '(unsigned-byte 32) ',unsigned-op x y))))
+                        ,@(and double-op
+                               `(((equal eltype 'double-float)
+                                  (make-thunk '(unsigned-byte 32) ',double-op x y))))
+                        (t
+                         (error "Don't know how to ~S vectors of ~S" ',name eltype)))))))
+  (def v=  bsp.vm-op:unsigned=  bsp.vm-op:double=)
+  (def v/= bsp.vm-op:unsigned/= bsp.vm-op:double/=)
+  (def v<  bsp.vm-op:unsigned<  bsp.vm-op:double<)
+  (def v<= bsp.vm-op:unsigned<= bsp.vm-op:double<=)
+  (def v>  bsp.vm-op:unsigned<  bsp.vm-op:double>)
+  (def v>= bsp.vm-op:unsigned>= bsp.vm-op:double>=)
+  (def vand bsp.vm-op:unsigned-and)
+  (def vor  bsp.vm-op:unsigned-or)
+  (def vxor bsp.vm-op:unsigned-xor))
+
 (defparameter *a* (make-array 1000
                               :element-type 'double-float
                               :initial-element 10d0))
@@ -141,11 +214,12 @@
                               :element-type 'double-float
                               :initial-element 3d0))
 
-(defparameter *c* (make-array 1000
-                              :element-type '(unsigned-byte 32)))
+(defparameter *c* (map-into (make-array 1000
+                                        :element-type '(unsigned-byte 32))
+                            (lambda ()
+                              (ldb (byte 32 0) (- (random 2))))))
 
-(defparameter *d* (make-array 1000
-                              :element-type '(unsigned-byte 32)))
-
-(defun v/op (&rest args)
-  (break "Unimplemented ~A" args))
+(defparameter *d* (map-into (make-array 1000
+                                        :element-type '(unsigned-byte 32))
+                            (lambda ()
+                              (ldb (byte 32 0) (- (random 2))))))

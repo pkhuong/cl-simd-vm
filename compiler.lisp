@@ -81,7 +81,8 @@
     (when mask
       (when (consp mask)
         (setf mask (second mask)))
-      (setf (gethash mask *mask-vars*) t))
+      (setf (gethash mask *mask-vars*) t)
+      (mark-live mask))
     (map nil #'mark-live args)))
 
 (defun mark-reducer-args (reducer ops)
