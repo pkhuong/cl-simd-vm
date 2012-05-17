@@ -28,9 +28,9 @@
             thereis (eq substack root))))
 
 (defvar *roots* '())
-(defmacro with-roots ((&rest args) &body body)
+(defmacro vlet ((&rest args) &body body)
   (unless args
-    (return-from with-roots `(locally ,@body)))
+    (return-from vlet `(locally ,@body)))
   (let* ((args (mapcar (lambda (x)
                          (if (consp x)
                              x
