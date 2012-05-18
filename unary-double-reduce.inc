@@ -10,13 +10,36 @@ int NAME (unsigned size, unsigned * restrict mask, int mask_summary,
 
         if (mask_summary == 1) {
                 unsigned packed_size = size/2;
-                v2d acc = *(v2d*)dst;
+                v2d acc0 = *(v2d*)dst,
+                    acc1 = {NEUTRAL, NEUTRAL},
+                    acc2 = acc1,
+                    acc3 = acc1;
                 v2d * restrict psrc = (v2d*)src;
-                for (unsigned i = 0; i < packed_size; i++) {
-                        v2d x = psrc[i];
-                        acc = OP(acc, x);
+                for (unsigned i = 0; i < packed_size; i+=4) {
+                        {
+                                v2d x = psrc[i];
+                                acc0 = OP(acc0, x);
+                        }
+                        {
+                                v2d x = psrc[i];
+                                acc1 = OP(acc1, x);
+                        }
+                        {
+                                v2d x = psrc[i];
+                                acc2 = OP(acc2, x);
+                        }
+                        {
+                                v2d x = psrc[i];
+                                acc3 = OP(acc3, x);
+                        }
                 }
-                *(v2d*)dst = acc;
+                for (unsigned i = packed_size&(-4U); i < packed_size; i++) {
+                                v2d x = psrc[i];
+                                acc0 = OP(acc0, x);                        
+                }
+                acc0 = OP(acc0, acc1);
+                acc2 = OP(acc2, acc3);
+                *(v2d*)dst = OP(acc0, acc2);
 
                 {
                         unsigned flip = flipped? -1U : 0;
@@ -33,7 +56,7 @@ int NAME (unsigned size, unsigned * restrict mask, int mask_summary,
                         *dst = acc;
                 }
                 return 0;
-        } 
+        }
 
         unsigned packed_size = size/4;
         v4u * restrict pmask = (v4u*)mask;

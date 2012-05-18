@@ -19,15 +19,24 @@ int NAME (unsigned size, unsigned * restrict mask, int mask_summary,
                 v2d * restrict px = (v2d*)x;
                 v2d * restrict py = (v2d*)y;
 
-                for (unsigned i = 0; i < packed_size; i++) {
-                        v2d x = px[i*2], y = py[i*2];
-                        v4u lo = (v4u)OP(x, y);
-                        x = px[i*2+1]; y = py[i*2+1];
-                        v4u hi = (v4u)OP(x, y);
-                        v4u mixed = __builtin_shufflevector(lo, hi, 0, 2, 4, 6);
-                        PSUMMARISE(mixed);
-                        pdst[i] = mixed;
-                }
+#define BODY(I) do {                                                    \
+                        unsigned i = (I);                               \
+                        v2d x = px[i*2], y = py[i*2];                   \
+                        v4u lo = (v4u)OP(x, y);                         \
+                        x = px[i*2+1]; y = py[i*2+1];                   \
+                        v4u hi = (v4u)OP(x, y);                         \
+                        v4u mixed = __builtin_shufflevector(lo, hi,     \
+                                                            0, 2, 4, 6); \
+                        PSUMMARISE(mixed);                              \
+                        pdst[i] = mixed;                                \
+                } while (0)
+
+                for (unsigned ii = 0; ii < packed_size; ii+=4)
+                        for (unsigned j = 0; j < 4; j++)
+                                BODY(i+j);
+                for (unsigned ii = packed_size&(-4U); ii < packed_size; ii++)
+                        BODY(ii);
+#undef BODY
         } else {
                 unsigned packed_size = size/4;
                 v4u * restrict pmask = (v4u*)mask;
@@ -38,21 +47,30 @@ int NAME (unsigned size, unsigned * restrict mask, int mask_summary,
                 if (flipped)
                         flip = ~flip;
 
-                for (unsigned i = 0; i < packed_size; i++) {
-                        v4u mask = pmask[i]^flip;
-                        v4u hi, lo;
-                        {
-                                v2d x = px[i*2], y = py[i*2];
-                                lo = (v4u)OP(x, y);
-                        }
-                        {
-                                v2d x = px[i*2+1], y = py[i*2+1];
-                                hi = (v4u)OP(x, y);
-                        }
-                        v4u mixed = __builtin_shufflevector(lo, hi, 0, 2, 4, 6)&mask;
-                        PSUMMARISE(mixed);
-                        pdst[i] = mixed;
-                }
+#define BODY(I) do {                                                    \
+                        unsigned i = (I);                               \
+                        v4u mask = pmask[i]^flip;                       \
+                        v4u hi, lo;                                     \
+                        {                                               \
+                                v2d x = px[i*2], y = py[i*2];           \
+                                lo = (v4u)OP(x, y);                     \
+                        }                                               \
+                        {                                               \
+                                v2d x = px[i*2+1], y = py[i*2+1];       \
+                                hi = (v4u)OP(x, y);                     \
+                        }                                               \
+                        v4u mixed = __builtin_shufflevector(lo, hi,     \
+                                                            0, 2, 4, 6)&mask; \
+                        PSUMMARISE(mixed);                              \
+                        pdst[i] = mixed;                                \
+                } while (0)
+
+                for (unsigned ii = 0; ii < packed_size; ii+=4)
+                        for (unsigned j = 0; j < 4; j++)
+                                BODY(ii+j);
+                for (unsigned ii = packed_size&(-4U); ii < packed_size; ii++)
+                        BODY(ii);
+#undef BODY
         }
 
         SCALAR_SUMMARY;

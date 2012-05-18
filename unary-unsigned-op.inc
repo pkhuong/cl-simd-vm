@@ -20,14 +20,28 @@ int NAME (unsigned size, unsigned * restrict mask, int mask_summary,
                 unsigned packed_size = size/4;
                 v4u * restrict pdst = (v4u*)dst;
                 v4u * restrict psrc = (v4u*)src;
-                for (unsigned i = 0; i < packed_size; i++) {
-                        v4u x = psrc[i];
-                        v4u r = OP(x);
 #ifdef PREDICATE
-                        PSUMMARISE(r);
+#define BODY(I) do {                            \
+                        unsigned i = (I);       \
+                        v4u x = psrc[i];        \
+                        v4u r = OP(x);          \
+                        PSUMMARISE(r);          \
+                        pdst[i] = r;            \
+                } while (0)
+#else
+#define BODY(I) do {                            \
+                        unsigned i = (I);       \
+                        v4u x = psrc[i];        \
+                        v4u r = OP(x);          \
+                        pdst[i] = r;            \
+                } while (0)
 #endif
-                        pdst[i] = r;
-                }
+                for (unsigned ii = 0; ii < packed_size; ii+=4)
+                        for (unsigned j = 0; j < 4; j++)
+                                BODY(ii+j);
+                for (unsigned ii = packed_size&(-4u); ii < packed_size; ii++)
+                        BODY(ii);
+#undef BODY
         } else {
                 unsigned packed_size = size/4;
                 v4u * restrict pmask = (v4u*)mask;
@@ -37,15 +51,31 @@ int NAME (unsigned size, unsigned * restrict mask, int mask_summary,
                 if (flipped)
                         flip = ~flip;
 
-                for (unsigned i = 0; i < packed_size; i++) {
-                        v4u mask = pmask[i]^flip;
-                        v4u src = psrc[i];
-                        v4u r = OP(src)&mask;
 #ifdef PREDICATE
-                        PSUMMARISE(r);
+#define BODY(I) do {                                    \
+                        unsigned i = (I);               \
+                        v4u mask = pmask[i]^flip;       \
+                        v4u src = psrc[i];              \
+                        v4u r = OP(src)&mask;           \
+                        PSUMMARISE(r);                  \
+                        pdst[i] = r;                    \
+                } while (0)
+#else
+#define BODY(I) do {                                    \
+                        unsigned i = (I);               \
+                        v4u mask = pmask[i]^flip;       \
+                        v4u src = psrc[i];              \
+                        v4u r = OP(src)&mask;           \
+                        pdst[i] = r;                    \
+                } while (0)
 #endif
-                        pdst[i] = r;
-                }
+
+                for (unsigned ii = 0; ii < packed_size; ii+=4)
+                        for (unsigned j = 0; j < 4; j++)
+                                BODY(ii+j);
+                for (unsigned ii = packed_size&(-4U); ii < packed_size; ii++)
+                        BODY(ii);
+#undef BODY
         }
 
 #ifdef PREDICATE
