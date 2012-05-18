@@ -101,11 +101,14 @@
                                    arg)))))
                (emit-calls (max &body default)
                  (declare (optimize (speed 0)))
-                 `(typecase args
+                 `(case (length args)
                     ,@(loop for i upto max collect
-                            `((simple-array t (,i)) (emit-call ,i)))
+                            `(,i
+                              (locally (declare (type (simple-array t (,i)) args)
+                                                (optimize (safety 0)))
+                                (emit-call ,i))))
                     (t ,@default))))
-      (emit-calls 5
+      (emit-calls 7
        (apply fun vectors summaries chunk-size
               (loop for arg across args
                     if (var-p arg)
@@ -139,7 +142,7 @@
   (let ((w1 (sb-kernel:%vector-raw-bits vector 0))
         (w2 (sb-kernel:%vector-raw-bits vector 1)))
     (cond ((= (logior w1 w2) 0) -1)
-          ((= (logand w1 w2) (ldb (byte 0 sb-vm:n-word-bits) -1))
+          ((= (logand w1 w2) (ldb (byte sb-vm:n-word-bits 0) -1))
            1)
           (t 0)))
   #-sbcl 0)
