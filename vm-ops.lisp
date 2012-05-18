@@ -31,7 +31,10 @@
 (deftype summaries (&optional length)
   `(simple-array fixnum (,length)))
 
+#+darwin
 (load-shared-object "/Users/pkhuong/mini-bsp/vm-ops.dylib")
+#+linux
+(load-shared-object "/home/pkhuong/mini-bsp/vm-ops.so")
 
 (defmacro with-array-saps ((&rest bindings) &body body)
   (let ((gensyms (mapcar (lambda (binding)
