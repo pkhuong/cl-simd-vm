@@ -1,0 +1,10 @@
+(defpackage "BSP.COMPILER"
+  (:export "OP"      "OP-P" "MAKE-OP" "MAKE-OP-WITH-CLASS"
+           "OP-DSTS" "OP-MASKS" "OP-FUN" "OP-ARGS"
+
+           "REDUCER" "REDUCER-P" "MAKE-REDUCER" "MAKE-REDUCER-WITH-CLASS"
+           "REDUCER-2ARG-REDUCER" "REDUCER-1ARG-REDUCER" "SET-REDUCER-VALUE"
+           
+           "VEC"     "ELTYPE-OF" "DATA-OF" "INITIAL-ELEMENT-OF" "INITIAL-ELEMENT"
+           "TO-BBLOCK")
+  (:use "CL"))
