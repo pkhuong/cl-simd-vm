@@ -3,7 +3,8 @@
   :licence "BSD"
   :description "SIMD-oriented vector map/reduce VM and front-end"
   :serial t
-  :components ((:file "vm/vm-ops")
+  :components ((:file "package")
+               (:file "vm/vm-ops")
                (:file "vm/vm")
                (:file "compiler/package")
                (:file "compiler/data-structures")

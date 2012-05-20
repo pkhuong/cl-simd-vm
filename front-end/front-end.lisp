@@ -1,15 +1,3 @@
-(defpackage "BSP"
-  (:use)
-  (:export "VECTOR" "VALUE" "LET" "WITH-CONTEXT" "N"
-           "BARRIER"
-           "IF" "+" "-" "*" "/" "%"
-           "~"
-           "=" "/=" "<" ">" "<=" ">=" "AND" "OR" "XOR" "MAX" "MIN"
-
-           "/+" "/*" "/MIN" "/MAX" "/OR" "/AND" "/XOR"
-           "//+" "//*" "//MIN" "//MAX" "//OR" "//AND" "//XOR")
-  (:nicknames "V"))
-
 (defpackage "BSP.FRONT"
   (:use "CL")
   (:import-from "BSP.COMPILER" "ELTYPE-OF" "DATA-OF" "SET-REDUCER-VALUE")
@@ -18,6 +6,14 @@
            "REDUCER" "MAKE-REDUCER" "SET-REDUCER-VALUE"))
 
 (in-package "BSP.FRONT")
+(defconstant bsp:double 'bsp:double)
+(deftype bsp:double () 'double-float)
+
+(defconstant bsp:bool 'bsp:bool)
+(deftype bsp:bool () '(unsigned-byte 32))
+
+(defconstant bsp:u32 'bsp:u32)
+(deftype bsp:u32 () '(unsigned-byte 32))
 
 (defgeneric bsp:value (x))
 
@@ -85,7 +81,7 @@
   `(let* ((*context* (make-instance 'bsp-context
                                     :count ,count
                                     :chunk ,chunk-size))
-          (*mask-stack* (list (make-constant '(unsigned-byte 32)
+          (*mask-stack* (list (make-constant bsp:bool
                                              (ldb (byte 32 0) -1)))))
      ,@body))
 
@@ -96,7 +92,13 @@
     (or (gethash source table)
         (setf (gethash source table)
               (make-instance 'bsp:vector
-                             :eltype  (array-element-type source)
+                             :eltype  (let ((type (array-element-type source)))
+                                        (cond ((equal type 'double-float)
+                                               bsp:double)
+                                              ((equal type '(unsigned-byte 32))
+                                               bsp:u32)
+                                              (t
+                                               (error "Can't construct vector for eltype ~S" type))))
                              :data    source)))))
 
 (defun %make-op (eltype fun &rest args)
@@ -124,30 +126,30 @@
   (apply '%make-op eltype fun args))
 
 (defun vmerge (condition x y)
-  (assert (equal (eltype-of x) (eltype-of y)))
-  (assert (equal (eltype-of condition) '(unsigned-byte 32)))
+  (assert (equal (eltype-of condition) bsp:bool))
   (let ((type (eltype-of x)))
-    (cond ((equal type '(unsigned-byte 32))
-           (%make-op type 'bsp.vm-op:merge-unsigned
-                     condition x y))
-          ((eql   type 'double-float)
-           (%make-op type 'bsp.vm-op:merge-double
-                     condition x y))
-          (t (error "Don't know how to ~S vectors of ~S" 'vmerge type)))))
+    (assert (equal type (eltype-of y)))
+    (ecase type
+      ((bsp:bool bsp:u32)
+       (%make-op type 'bsp.vm-op:merge-unsigned
+                 condition x y))
+      (bsp:double
+       (%make-op type 'bsp.vm-op:merge-double
+                 condition x y)))))
 
 (defun vcomplement (condition)
-  (assert (equal (eltype-of condition) '(unsigned-byte 32)))
-  (make-op '(unsigned-byte 32)
+  (assert (equal (eltype-of condition) bsp:bool))
+  (make-op bsp:bool
            'bsp.vm-op:complement-mask
            condition))
 
 (defun call-with-mask (condition then-thunk else-thunk)
   (unless (typep condition 'bsp:vector)
     (return-from call-with-mask (funcall (if condition then-thunk else-thunk))))
-  (assert (equal (eltype-of condition) '(unsigned-byte 32)))
+  (assert (equal (eltype-of condition) bsp:bool))
   (assert (has-root *mask-stack* (mask-stack-of condition)))
   (unless (eql *mask-stack* (mask-stack-of condition))
-    (setf condition (make-op '(unsigned-byte 32)
+    (setf condition (make-op bsp:bool
                              'bsp.vm-op:canonicalise-mask condition)))
   (let ((then
           (let ((*mask-stack* (cons condition *mask-stack*)))
@@ -166,14 +168,15 @@
 
 (defun %vectorify (x)
   (etypecase x
-    (null x)
+    (boolean (make-constant bsp:bool (if x (ldb (byte 32 0) -1) 0)))
     (bsp.compiler:vec x)
-    (double-float (make-constant 'double-float x))
-    ((unsigned-byte 32) (make-constant '(unsigned-byte 32) x))
+    (double-float (make-constant bsp:double x))
+    ((unsigned-byte 32) (make-constant bsp:u32 x))
     ((simple-array * 1) (make-vector x))))
 
-(defmacro vectorify (place)
-  `(setf ,place (%vectorify ,place)))
+(defmacro vectorify (place &optional (really-p t))
+  `(when ,really-p
+     (setf ,place (%vectorify ,place))))
 
 (defmacro bsp:if (condition then &optional else)
   `(call-with-mask (%vectorify ,condition)

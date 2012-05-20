@@ -223,12 +223,11 @@
     alloc))
 
 (defun alloc-vector (type size &optional initial-element)
-  (cond ((equal type '(unsigned-byte 32))
-         (alloc-unsigned-vector size initial-element))
-        ((eql type 'double-float)
-         (alloc-double-vector size initial-element))
-        (t
-         (error "Unknown eltype ~S" type))))
+  (ecase type
+    ((bsp:bool bsp:u32)
+     (alloc-unsigned-vector size initial-element))
+    (bsp:double
+     (alloc-double-vector size initial-element))))
 
 (defun globally-setup-bblock (bblock)
   (declare (type bblock bblock)
@@ -278,11 +277,9 @@
                (setf (aref vectors    i) data
                      (aref properties i) flags
                      (aref strides    i) (if globalp
-                                             (cond ((equal type 'double-float)
-                                                    8)
-                                                   ((equal type '(unsigned-byte 32))
-                                                    4)
-                                                   (t (error "WTF?")))
+                                             (ecase type
+                                               ((bsp:bool bsp:u32) 4)
+                                               (bsp:double         8))
                                              0))))
     (values vectors properties strides)))
 
