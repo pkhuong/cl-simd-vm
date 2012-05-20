@@ -43,15 +43,26 @@ inline unsigned scalarify_pand (v4u x)
                 summary_and &= (X);             \
         } while (0)
 
-#define RETURN_SUMMARY do {                             \
-                if (summary_or == 0) return -1;         \
-                if (summary_and == -1U) return 1;       \
-                return 0;                               \
+#define SUMMARY_VALUE(IDX) do {                                 \
+                if ((summary_or == 0) || (summary_and == -1U))  \
+                        properties[IDX] |= CONSTANT_FLAG;       \
+                else    properties[IDX] &= ~CONSTANT_FLAG;      \
         } while (0)
         
 
-int summarise (unsigned size, unsigned * restrict data)
+#define CONSTANT_FLAG 1
+#define DEAD_FLAG     2
+#define MASK_FLAG     4
+
+void summarise (void ** vectors, unsigned * properties,
+                unsigned long start, unsigned size,
+                unsigned idx)
 {
+        return;
+        (void)start;
+        unsigned * restrict data = vectors[idx];
+        if (properties[idx] & CONSTANT_FLAG) return;
+
         WITH_SUMMARY;
 
         {
@@ -70,15 +81,19 @@ int summarise (unsigned size, unsigned * restrict data)
                 SUMMARISE(x);
         }
 
-        RETURN_SUMMARY;
+        SUMMARY_VALUE(idx);
 }
 
-int canonicalise_mask (unsigned size, unsigned * restrict mask, int mask_summary,
-                       int flipped, int for_mask,
-                       unsigned * restrict dst, unsigned * restrict src)
+void canonicalise_mask (void ** vectors, unsigned * properties,
+                        unsigned long start, unsigned size,
+                        unsigned mask_idx, int flipped, unsigned dst_idx, unsigned src_idx)
 {
-        (void)mask_summary;
+        (void)start;
         WITH_SUMMARY;
+
+        unsigned * restrict mask = vectors[mask_idx];
+        unsigned * restrict  dst = vectors[dst_idx];
+        unsigned * restrict  src = vectors[src_idx];
 
         {
                 unsigned packed_size = size/4;
@@ -102,17 +117,23 @@ int canonicalise_mask (unsigned size, unsigned * restrict mask, int mask_summary
                 dst[i] = x;
         }
 
-        RETURN_SUMMARY;
+        SUMMARY_VALUE(dst_idx);
 }
 
-#include <stdio.h>
-
-int merge64 (unsigned size, unsigned * restrict mask, int mask_summary,
-             int flipped, int for_mask,
-             double * restrict dst,
-             unsigned * restrict select,
-             double * restrict x, double * restrict y)
+void merge64 (void ** values, unsigned * properties,
+              unsigned long start, unsigned size,
+              unsigned mask_idx, int flipped,
+              unsigned dst_idx, unsigned select_idx,
+              unsigned x_idx, unsigned y_idx)
 {
+        (void)start;
+        (void)properties;
+        unsigned * restrict mask = values[mask_idx];
+        unsigned * restrict select = values[select_idx];
+        double * restrict dst = values[dst_idx];
+        double * restrict x = values[x_idx];
+        double * restrict y = values[y_idx];
+
         {
                 unsigned packed_size = size/4;
                 v4u * restrict pmask = (v4u*)mask;
@@ -149,16 +170,21 @@ int merge64 (unsigned size, unsigned * restrict mask, int mask_summary,
                         r = select[i]?x[i]:y[i];
                 dst[i] = r;
         }
-
-        return 0;
 }
 
-int merge32 (unsigned size, unsigned * restrict mask, int mask_summary,
-             int flipped, int for_mask,
-             unsigned * restrict dst,
-             unsigned * restrict select,
-             unsigned * restrict x, unsigned * restrict y)
+void merge32 (void ** values, unsigned * properties,
+              unsigned long start, unsigned size,
+              unsigned mask_idx, int flipped,
+              unsigned dst_idx, unsigned select_idx,
+              unsigned x_idx, unsigned y_idx)
 {
+        (void)start;
+        unsigned * restrict mask = values[mask_idx];
+        unsigned * restrict dst  = values[dst_idx];
+        unsigned * restrict select = values[select_idx];
+        unsigned * restrict x    = values[x_idx];
+        unsigned * restrict y    = values[y_idx];
+
         WITH_SUMMARY;
 
         {
@@ -193,20 +219,35 @@ int merge32 (unsigned size, unsigned * restrict mask, int mask_summary,
                 dst[i] = r;
         }
 
-        RETURN_SUMMARY;
+        SUMMARY_VALUE(dst_idx);
 }
 
-int complement_mask (unsigned size, unsigned * restrict mask, int mask_summary,
-                     int flipped, int for_mask,
-                     unsigned * restrict dst, unsigned * restrict src)
+void complement_mask (void ** values, unsigned * properties,
+                      unsigned long start, unsigned size,
+                      unsigned mask_idx, int flipped,
+                      unsigned dst_idx, unsigned src_idx)
 {
+        (void)start;
+        unsigned * restrict mask = values[mask_idx];
+        unsigned * restrict dst  = values[dst_idx];
+        unsigned * restrict src  = values[src_idx];
+        int for_mask = properties[dst_idx] & MASK_FLAG;
+        int mask_summary = 0;
+
+        if (properties[mask_idx] & CONSTANT_FLAG) {
+                if(*mask == 0) mask_summary = -1;
+                if(*mask == -1U) mask_summary = 1;
+        }
+
         if (flipped)
                 mask_summary = -mask_summary;
 
         if (mask_summary == -1) {
-                if (for_mask)
+                if (for_mask) {
                         bzero(dst, size*sizeof(double));
-                return -1;
+                        properties[dst_idx] |= CONSTANT_FLAG;
+                }
+                return;
         }
 
         WITH_SUMMARY;
@@ -253,7 +294,7 @@ int complement_mask (unsigned size, unsigned * restrict mask, int mask_summary,
                 dst[i] = r;
         }
 
-        RETURN_SUMMARY;
+        SUMMARY_VALUE(dst_idx);
 }
 
 #define NAME neg_double
@@ -579,3 +620,4 @@ int complement_mask (unsigned size, unsigned * restrict mask, int mask_summary,
 #undef SCALAR_OP
 #undef OP
 #undef NAME
+

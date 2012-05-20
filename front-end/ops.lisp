@@ -1,0 +1,204 @@
+(in-package "BSP.FRONT")
+
+(macrolet ((def (name (&optional binary-double unary-double)
+                      (&optional binary-unsigned unary-unsigned))
+             `(defun ,name (x ,@(and (or unary-double unary-unsigned) '(&optional)) y)
+                (vectorify x)
+                (vectorify y)
+                (when (and x y)
+                  (assert (equal (eltype-of x) (eltype-of y))))
+                (let ((eltype (eltype-of x)))
+                  (if y
+                      (cond ,@(and binary-double
+                                   `(((equal eltype 'double-float)
+                                      (make-op eltype ',binary-double x y))))
+                            ,@(and binary-unsigned
+                                   `(((equal eltype '(unsigned-byte 32))
+                                      (make-op eltype ',binary-unsigned x y))))
+                            (t (error "Don't know how to ~S vectors of ~S" ',name eltype)))
+                      (cond ,@(and unary-double
+                                   `(((equal eltype 'double-float)
+                                      ,(if (eql unary-double 'identity)
+                                           'x
+                                           `(make-op eltype ',unary-double x)))))
+                            ,@(and unary-unsigned
+                                   `(((equal eltype '(unsigned-byte 32))
+                                      ,(if (eql unary-unsigned 'identity)
+                                           'x
+                                           `(make-op eltype ',unary-unsigned x)))))
+                            (t (error "Don't know how to ~S a vector of ~S" ',name eltype))))))))
+  (def v+ (bsp.vm-op:double+ identity)             (bsp.vm-op:unsigned+ identity))
+  (def v- (bsp.vm-op:double- bsp.vm-op:double-neg) (bsp.vm-op:unsigned- bsp.vm-op:unsigned-neg))
+  (def v* (bsp.vm-op:double* identity)             (bsp.vm-op:unsigned* identity))
+  (def v/ (bsp.vm-op:double/ bsp.vm-op:double-inv) (bsp.vm-op:unsigned/))
+  (def v% () (bsp.vm-op:unsigned%)))
+
+(defun v~ (x)
+  (vectorify x)
+  (assert (equal (eltype-of x) '(unsigned-byte 32)))
+  (make-op '(unsigned-byte 32) 'bsp.vm-op:unsigned-complement x))
+
+(macrolet ((def (name unsigned-op &optional double-op)
+             `(defun ,name (x y)
+                (vectorify x)
+                (vectorify y)
+                (assert (equal (eltype-of x) (eltype-of y)))
+                (let ((eltype (eltype-of x)))
+                  (cond ,@(and unsigned-op
+                               `(((equal eltype '(unsigned-byte 32))
+                                  (make-op '(unsigned-byte 32) ',unsigned-op x y))))
+                        ,@(and double-op
+                               `(((equal eltype 'double-float)
+                                  (make-op '(unsigned-byte 32) ',double-op x y))))
+                        (t
+                         (error "Don't know how to ~S vectors of ~S" ',name eltype)))))))
+  (def v=  bsp.vm-op:unsigned=  bsp.vm-op:double=)
+  (def v/= bsp.vm-op:unsigned/= bsp.vm-op:double/=)
+  (def v<  bsp.vm-op:unsigned<  bsp.vm-op:double<)
+  (def v<= bsp.vm-op:unsigned<= bsp.vm-op:double<=)
+  (def v>  bsp.vm-op:unsigned<  bsp.vm-op:double>)
+  (def v>= bsp.vm-op:unsigned>= bsp.vm-op:double>=)
+  (def vand bsp.vm-op:unsigned-and)
+  (def vor  bsp.vm-op:unsigned-or)
+  (def vxor bsp.vm-op:unsigned-xor)
+  (def vmax bsp.vm-op:unsigned-max bsp.vm-op:double-max)
+  (def vmin bsp.vm-op:unsigned-min bsp.vm-op:double-min))
+
+(defclass reducer (bsp.compiler:reducer)
+  (value))
+
+(defmethod set-reducer-value ((reducer reducer) value)
+  (setf (slot-value reducer 'value) value))
+
+(defmethod value ((reducer reducer))
+  (unless (slot-boundp reducer 'value)
+    (%barrier *context* '() (vector reducer)))
+  (slot-value reducer 'value))
+
+(defun make-reducer (args eltype initial-element
+                     vector-reducer 2arg-reducer 1arg-reducer)
+  (let* ((args (coerce args 'simple-vector))
+         (sources (remove-if-not (lambda (x)
+                                   (typep x 'bsp-vector))
+                                 args))
+         (stack
+           (reduce (lambda (x y)
+                     (if (> (length x) (length y))
+                         x y))
+                   sources :key #'mask-stack-of
+                   :initial-value nil)))
+    (assert (every (lambda (source)
+                     (has-root
+                      stack
+                      (mask-stack-of source)))
+                   sources))
+    (let* ((dst (make-instance 'bsp-vector
+                               :eltype eltype
+                               :initial-element initial-element
+                               :mask   (car *mask-stack*)
+                               :mask-stack *mask-stack*))
+           (mask (car *mask-stack*))
+           (flipped (consp mask))
+           (mask (if flipped (second mask) mask))
+           (reducer
+             (bsp.compiler:make-reducer-with-class
+              'reducer vector-reducer 
+              dst mask (concatenate 'simple-vector
+                                    (vector mask flipped dst)
+                                    args)
+              2arg-reducer 1arg-reducer)))
+      (vector-push-extend reducer (ops-of *context*))
+      reducer)))
+
+(macrolet ((def (name op (unsigned-op unsigned-neutral)
+                         (&optional double-op double-neutral)
+                 &aux (%name (intern (format nil "%~A" name))))
+             `(progn
+                (defun ,%name (x)
+                  (vectorify x)
+                  (let ((eltype (eltype-of x)))
+                    (cond ,@(and unsigned-op
+                                 `(((equal eltype '(unsigned-byte 32))
+                                    (make-reducer
+                                     (vector x)
+                                     eltype
+                                     ,unsigned-neutral
+                                     ',unsigned-op
+                                     (sb-int:named-lambda unsigned-2arg
+                                         (vec1 prop1 vec2 prop2 chunk-start chunk-size
+                                          mask flip-p
+                                          dst src)
+                                       (declare (type (and fixnum (integer 4)) chunk-size)
+                                                (type (simple-array sb-ext:word 1) vec1 vec2)
+                                                (type (unsigned-byte 32) dst src)
+                                                (ignore chunk-start chunk-size prop1 prop2
+                                                        mask flip-p src))
+                                       (let ((dst1 (sb-sys:int-sap (aref vec1 dst)))
+                                             (dst2 (sb-sys:int-sap (aref vec2 dst))))
+                                         (dotimes (i 8)
+                                           (setf (sb-sys:sap-ref-32 dst1 (* i 4))
+                                                 (,op (sb-sys:sap-ref-32 dst1 (* i 4))
+                                                      (sb-sys:sap-ref-32 dst2 (* i 4)))))))
+                                     (sb-int:named-lambda unsigned-1arg
+                                         (vec prop chunk-start chunk-size
+                                          mask flip-p
+                                          dst src)
+                                       (declare (type (and fixnum (integer 4)) chunk-size)
+                                                (type (simple-array sb-ext:word 1) vec)
+                                                (type (unsigned-byte 32) dst src)
+                                                (ignore chunk-start chunk-size prop
+                                                        mask flip-p src))
+                                       (let* ((src (sb-sys:int-sap (aref vec dst)))
+                                              (acc (sb-sys:sap-ref-32 src 0)))
+                                         (loop for i from 1 below 8 do
+                                           (setf acc (,op acc (sb-sys:sap-ref-32 src (* 4 i)))))
+                                         acc))))))
+                          ,@(and double-op
+                                 `(((equal eltype 'double-float)
+                                    (make-reducer
+                                     (vector x)
+                                     eltype
+                                     ,double-neutral
+                                     ',double-op
+                                     (sb-int:named-lambda double-2arg
+                                         (vec1 prop1 vec2 prop2 chunk-start chunk-size
+                                          mask flip-p
+                                          dst src)
+                                       (declare (type (and fixnum (integer 4)) chunk-size)
+                                                (type (simple-array sb-ext:word 1) vec1 vec2)
+                                                (type (unsigned-byte 32) dst src)
+                                                (ignore chunk-start chunk-size prop1 prop2
+                                                        mask flip-p src))
+                                       (let ((dst1 (sb-sys:int-sap (aref vec1 dst)))
+                                             (dst2 (sb-sys:int-sap (aref vec2 dst))))
+                                         (dotimes (i 4)
+                                           (setf (sb-sys:sap-ref-double dst1 (* i 8))
+                                                 (,op (sb-sys:sap-ref-double dst1 (* i 8))
+                                                      (sb-sys:sap-ref-double dst2 (* i 8)))))))
+                                     (sb-int:named-lambda double-1arg
+                                         (vec prop chunk-start chunk-size
+                                          mask flip-p
+                                          dst src)
+                                       (declare (type (and fixnum (integer 4)) chunk-size)
+                                                (type (simple-array sb-ext:word 1) vec)
+                                                (type (unsigned-byte 32) dst src)
+                                                (ignore chunk-start chunk-size prop
+                                                        mask flip-p src))
+                                       (let* ((src (sb-sys:int-sap (aref vec dst)))
+                                              (acc (sb-sys:sap-ref-double src 0)))
+                                         (loop for i from 1 below 4 do
+                                           (setf acc (,op acc (sb-sys:sap-ref-double src (* 8 i)))))
+                                         acc))))))
+                          (t
+                           (error "Don't know how to ~S vectors of ~S" ',name eltype)))))
+                (defun ,name (x)
+                  (value (,%name x))))))
+  (def v/+ + (bsp.vm-op:unsigned/+ 0) (bsp.vm-op:double/+ 0d0))
+  (def v/* * (bsp.vm-op:unsigned/* 1) (bsp.vm-op:double/* 1d0))
+  (def v/min min (bsp.vm-op:unsigned/min (ldb (byte 32 0) -1))
+                 (bsp.vm-op:double/min   sb-ext:double-float-positive-infinity))
+  (def v/max max (bsp.vm-op:unsigned/min 0)
+                 (bsp.vm-op:double/min   sb-ext:double-float-negative-infinity))
+  (def v/or  logior (bsp.vm-op:unsigned/or  0) ())
+  (def v/and logand (bsp.vm-op:unsigned/and 0) ())
+  (def v/xor logxor (bsp.vm-op:unsigned/xor 0) ()))

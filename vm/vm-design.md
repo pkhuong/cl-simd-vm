@@ -136,67 +136,78 @@ allocate enough space for a single chunk's worth of data and adjust
 the subsequence passed to each inner loop to always points to the
 beginning of local vectors.
 
+### Vector properties
+
+It is useful to know when a vector consists of the same constant
+replicated over all locations, or will not be used for masking
+operations, or even not used at all.  A bitset of properties is
+associated with each vector variable.
+
 ### Predicated operations
 
 The chunking also introduces a reasonable granularity over which to
 introduce conditional branches.  An operation that's predicated over a
 mask chunk that is known to be all -1 or all 0 can be executed more
-efficiently (or skipped).  In order to exploit that, a summary is
-associated with each vector, to denote whether the current chunk is
-"all -1", "all 0", or neither ("unknown").
-
-The default value for a summary is "unknown".  Operations may,
-however, set it to a more precise value.  Each operation is passed an
-argument to determine whether the computed values will be used as
-masks.  If so, each value is defined (to 0 if the predicate mask isn't
--1), and it is recommended to determine a useful summary value.
+efficiently (or skipped); this is easily determined by branching on
+the vector's constantness property.
 
 Non-local (global) vectors may be used as masks.  In that case, a
-result-less operation (`summary`) may be used to update its summary
+result-less operation (`summary`) may be used to update its property
 value with respect to the current chunk.
 
 ### Reduce operations
 
 Vectors that are only passed to reduce (fold) operations can be
 consumed incrementally chunk by chunk, avoiding the need to store full
-vectors.  Local vector variables may be marked as reduceable vectors.
-Such vectors are meant to be initialised with a neutral value, and
-will be used as both destination and argument by reduce functions.
-Once all chunks have been processed by worker threads, their
-reduceable vectors are further reduced, and the single remaining
-vector reduced into a scalar.
+vectors.  Local vector variables are initialised with a neutral value
+and used as both destination and source vectors for reduce operations.
+
+Once all chunks have been processed by worker threads, a sequence of
+reducer operations describe how to reduce such vectors pairwise, and
+then how to convert the final remaining vectors into scalar values.
 
 Concrete implementation
 -----------------------
 
 The basic block is represented with a vector of variable structures,
-and a vector of operations.
+a vector of operations, and a vector of reduction steps.
 
 Each variable structure denotes whether it is a local or a global
 vector, its element type and initial element, and its position in the
-vector of variables.  Global vectors also point to a mutable cell
-pointing to the whole vector (or filled with one as needed).
+vector of variables, and the information necessary to initialise the
+variable's property: constantness, liveness, whether it is used as a
+mask.  The global flag is also a function: called with no argument, it
+returns a pre-allocated vector, or `nil` if none; called with one
+argument, it is used to update the vector corresponding to the
+variable.
 
-Each operation is a sequence in which the first element is the
-function to call, and the rest arguments.  Arguments may be variable
-structures, or arbitrary scalars values.
+Each operation is a function to call, and a vector of arguments.
+References to variables should simply be replaced with each variable's
+location.
 
 Before execution, a vector of homogeneous vectors is allocated, and
 filled according to the variable structures.  Global vectors are
 allocated for the whole basic block, while local ones are allocated
-per worker.  A parallel vector of summary values (fixnums) is also
+per worker.  A parallel vector of property values (`unsigned`) is also
 allocated, per-worker.
 
-For each chunk in the iteration range, the operations are executed in
-sequence.  The function is called with the vector of vectors, the
-summary vector, the number of element to process in the chunk, and the
-arguments in the remainder of the operation.  Each argument that's
-actually a variable structure is replaced with two values: the
-corresponding vector variable's index, and the index at which the
-chunk begins (0 for local vectors).  The typical argument list for a
-vector-processing function is thus: `(vectors summaries count
-mask-index mask-start flip-p for-mask-p dst-index dst-start ...)`.
+For each chunk in the iteration range, the property vector is reset to
+its initial value, and the operations are executed in sequence.  Each
+function is called with a vector of addresses (the beginning of the
+vector's subsequence), the property vector, the beginning of the
+chunk, the size of the chunk, and the values in the argument vector.
+The typical argument list for a vector-processing function is thus:
+`(vectors properties start count mask-index flip-p dst-index ...)`.
 
-Finally, once all operations have been executed, all worker thread's
-reduceable vectors are pair-wise reduced, and the remaining vector
-reduced into a scalar.
+Finally, once all operations have been executed, the `reduce-step` are
+executed.  Each reduce-step is similar to an op, but contains two
+functions: a 2arg-reducer and a 1arg-reducer.  The 2arg function
+receives two vector and property vectors, and the rest of the
+arguments; the destination vector is the first one.  For example,
+`2arg-sum` could have this argument list: `(vectors1 properties1
+vectors2 properties2 start count mask-index flip-p dst-index
+src-index)`.  It would then take the partial sum in vectors2's
+dst-index'th vector, and increment the dst vector in vector1 with it.
+Once that is done, `1arg-sum` is called to compute a single scalar
+value from the temporary vectors.  In this case, it is called with
+only one pair of vectors and properties.

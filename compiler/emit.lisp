@@ -1,24 +1,15 @@
 (in-package "BSP.COMPILER")
-(defstruct register
-  loc
-  globalp
-  read-onlyp
-  livep
-  maskp
-  eltype
-  initial-element)
-
 (defstruct codegen-state
-  (registers
-   (make-array 32 :fill-pointer 0 :adjustable t)
-   :read-only t)
-  (ops
-   (make-array 32 :fill-pointer 0 :adjustable t)
-   :read-only t)
+  (registers (make-array 32 :fill-pointer 0 :adjustable t)
+             :read-only t)
+  (ops       (make-array 32 :fill-pointer 0 :adjustable t)
+             :read-only t)
   (vec-register (make-hash-table)
-   :read-only t)
-  (reduces
-   (make-array 32 :fill-pointer 0 :adjustable t)))
+                :read-only t)
+  (reduces   (make-array 32 :fill-pointer 0 :adjustable t)
+             :read-only t)
+  (summarised (make-hash-table)
+              :read-only t))
 
 (declaim (type codegen-state *codegen-state*))
 (defvar *codegen-state*)
@@ -26,16 +17,21 @@
 (defun var-reg (var &optional creationp)
   (declare (type vec var))
   (cond ((gethash var (codegen-state-vec-register
-                    *codegen-state*)))
+                       *codegen-state*)))
         (creationp
          (let ((register
                  (bsp.vm:make-var
                   (length (codegen-state-registers
                            *codegen-state*))
-                  (rootp var)
+                  (and (or (rootp var)
+                           (data-of var))
+                       (lambda (&optional value)
+                         (if value
+                             (setf (data-of var) value)
+                             (data-of var))))
                   (let ((writer (var-op var)))
-                    (not (and writer
-                              (livep writer))))
+                    (or (null writer)
+                        (not (livep writer))))
                   (livep var)
                   (maskp var)
                   (eltype-of var)
@@ -49,16 +45,33 @@
         (t
          (error "No known register for var ~S" var))))
 
+(defun ensure-summarised (var)
+  (when (or (gethash var (codegen-state-summarised *codegen-state*)))
+    (return-from ensure-summarised))
+  (setf (gethash var (codegen-state-summarised *codegen-state*))
+        t)
+  (unless (or (var-op var)
+              (and (null (data-of var))
+                   (initial-element-of var)))
+    (vector-push-extend (bsp.vm:make-op #'bsp.vm-op:summarise
+                                        (vector
+                                         (bsp.vm:var-loc
+                                          (var-reg var
+                                                   t))))
+                        (codegen-state-ops *codegen-state*))))
+
 (defun emit-one-op (op)
   (declare (type op op))
   (map nil (lambda (var)
              (var-reg var t))
        (op-dsts op))
+  (map nil #'ensure-summarised (op-masks op))
   (let ((args (map 'simple-vector
                    (lambda (x)
                      (if (typep x 'vec)
                          (bsp.vm:var-loc
-                          (var-reg x (initial-element-of x)))
+                          (var-reg x (or (initial-element-of x)
+                                         (data-of x))))
                          x))
                    (op-args op))))
     (vector-push-extend (bsp.vm:make-op (op-fun op) args)
@@ -67,7 +80,9 @@
       (vector-push-extend (bsp.vm:make-reduce-step
                            (reducer-2arg-reducer op)
                            (reducer-1arg-reducer op)
-                           args)
+                           args
+                           (lambda (value)
+                             (set-reducer-value op value)))
                           (codegen-state-reduces *codegen-state*)))))
 
 (defun emit-code (ops)

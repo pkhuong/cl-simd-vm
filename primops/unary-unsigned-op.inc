@@ -1,14 +1,30 @@
-int NAME (unsigned size, unsigned * restrict mask, int mask_summary,
-          int flipped, int for_mask,
-          unsigned * restrict dst, unsigned * restrict src)
+void NAME (void ** values, unsigned * properties,
+           unsigned long start, unsigned size,
+           unsigned mask_idx, int flipped,
+           unsigned dst_idx,
+           unsigned src_idx)
 {
+        (void)start;
+        unsigned * restrict mask = values[mask_idx];
+        unsigned * restrict dst = values[dst_idx];
+        unsigned * restrict src = values[src_idx];
+        int mask_summary = 0;
+        int for_mask = properties[dst_idx] & MASK_FLAG;
+
+        if (properties[mask_idx] & CONSTANT_FLAG) {
+                if(*mask == 0) mask_summary = -1;
+                if(*mask == -1U) mask_summary = 1;
+        }
+
         if (flipped)
                 mask_summary = -mask_summary;
 
         if (mask_summary == -1) {
-                if (for_mask)
+                if (for_mask) {
                         bzero(dst, size*sizeof(double));
-                return -1;
+                        properties[dst_idx] |= CONSTANT_FLAG;
+                }
+                return;
         }
 
 #ifdef PREDICATE
@@ -36,10 +52,10 @@ int NAME (unsigned size, unsigned * restrict mask, int mask_summary,
                         pdst[i] = r;            \
                 } while (0)
 #endif
-                for (unsigned ii = 0; ii < packed_size; ii+=4)
+                for (unsigned ii = 0; ii+4 <= packed_size; ii+=4)
                         for (unsigned j = 0; j < 4; j++)
                                 BODY(ii+j);
-                for (unsigned ii = packed_size&(-4u); ii < packed_size; ii++)
+                for (unsigned ii = (packed_size&(-4u)); ii < packed_size; ii++)
                         BODY(ii);
 #undef BODY
         } else {
@@ -70,10 +86,10 @@ int NAME (unsigned size, unsigned * restrict mask, int mask_summary,
                 } while (0)
 #endif
 
-                for (unsigned ii = 0; ii < packed_size; ii+=4)
+                for (unsigned ii = 0; ii+4 <= packed_size; ii+=4)
                         for (unsigned j = 0; j < 4; j++)
                                 BODY(ii+j);
-                for (unsigned ii = packed_size&(-4U); ii < packed_size; ii++)
+                for (unsigned ii = (packed_size&(-4U)); ii < packed_size; ii++)
                         BODY(ii);
 #undef BODY
         }
@@ -100,8 +116,6 @@ int NAME (unsigned size, unsigned * restrict mask, int mask_summary,
         }
 
 #ifdef PREDICATE
-        RETURN_SUMMARY;
-#else
-        return 0;
+        SUMMARY_VALUE(dst_idx);
 #endif
 }

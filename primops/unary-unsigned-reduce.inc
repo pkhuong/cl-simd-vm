@@ -1,24 +1,39 @@
-int NAME (unsigned size, unsigned * restrict mask, int mask_summary,
-          int flipped, int for_mask,
-          unsigned * restrict dst, unsigned * restrict src)
+void NAME (void ** values, unsigned * properties,
+           unsigned long start, unsigned size,
+           unsigned mask_idx, int flipped,
+           unsigned dst_idx,
+           unsigned src_idx)
 {
+        (void)start;
+        unsigned * restrict mask = values[mask_idx];
+        unsigned * restrict dst = values[dst_idx];
+        unsigned * restrict src = values[src_idx];
+        int mask_summary = 0;
+        int for_mask = properties[dst_idx] & MASK_FLAG;
+
+        if (properties[mask_idx] & CONSTANT_FLAG) {
+                if(*mask == 0) mask_summary = -1;
+                if(*mask == -1U) mask_summary = 1;
+        }
+
         if (flipped)
                 mask_summary = -mask_summary;
 
         if (mask_summary == -1) {
-                if (for_mask)
+                if (for_mask) {
                         bzero(dst, size*sizeof(double));
-                return -1;
+                        properties[dst_idx] |= CONSTANT_FLAG;
+                }
+                return;
         }
 
         if (mask_summary == 1) {
                 unsigned packed_size = size/4;
                 v4u acc0 = *(v4u*)dst,
-                    acc1 = {NEUTRAL, NEUTRAL, NEUTRAL, NEUTRAL},
-                    acc2 = acc1,
-                    acc3 = acc1;
+                    acc1, acc2, acc3;
+                acc1 = acc2 = acc3 = (v4u){NEUTRAL, NEUTRAL, NEUTRAL, NEUTRAL};
                 v4u * restrict psrc = (v4u*)src;
-                for (unsigned i = 0; i < packed_size; i+=4) {
+                for (unsigned i = 0; i+4 <= packed_size; i+=4) {
                         {
                                 v4u x = psrc[i];
                                 acc0 = OP(acc0, x);
@@ -36,7 +51,7 @@ int NAME (unsigned size, unsigned * restrict mask, int mask_summary,
                                 acc3 = OP(acc3, x);
                         }
                 }
-                for (unsigned i = packed_size&(-4u); i < packed_size; i++) {
+                for (unsigned i = (packed_size&(-4u)); i < packed_size; i++) {
                         v4u x = psrc[i];
                         acc0 = OP(acc0, x);
                 }
@@ -75,5 +90,5 @@ int NAME (unsigned size, unsigned * restrict mask, int mask_summary,
         }
         *dst = acc;
 
-        return 0;
+        return;
 }
