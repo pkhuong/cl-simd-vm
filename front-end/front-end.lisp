@@ -1,13 +1,13 @@
 (defpackage "BSP"
   (:use)
-  (:export "VECTOR" "VALUE" "LET" "WITH-CONTEXT" "COUNT"
+  (:export "VECTOR" "VALUE" "LET" "WITH-CONTEXT" "N"
            "BARRIER"
            "IF" "+" "-" "*" "/" "%"
            "~"
            "=" "/=" "<" ">" "<=" ">=" "AND" "OR" "XOR" "MAX" "MIN"
 
            "/+" "/*" "/MIN" "/MAX" "/OR" "/AND" "/XOR"
-           "%/+" "%/*" "%/MIN" "%/MAX" "%/OR" "%/AND" "%/XOR")
+           "//+" "//*" "//MIN" "//MAX" "//OR" "//AND" "//XOR")
   (:nicknames "V"))
 
 (defpackage "BSP.FRONT"
@@ -69,7 +69,7 @@
 (declaim (type list *mask-stack*))
 (defvar *mask-stack* '())
 
-(define-symbol-macro bsp:count (count-of *context*))
+(define-symbol-macro bsp:n (count-of *context*))
 
 (defun make-constant (eltype value)
   (let ((table (intern-table-of *context*))

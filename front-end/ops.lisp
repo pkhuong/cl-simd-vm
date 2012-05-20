@@ -112,7 +112,7 @@
 
 (macrolet ((def (name op (unsigned-op unsigned-neutral)
                          (&optional double-op double-neutral)
-                 &aux (%name (intern (format nil "%~A" name)
+                 &aux (%name (intern (format nil "/~A" name)
                               "BSP")))
              `(progn
                 (defun ,%name (x)
