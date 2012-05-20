@@ -27,13 +27,13 @@
                                            'x
                                            `(make-op eltype ',unary-unsigned x)))))
                             (t (error "Don't know how to ~S a vector of ~S" ',name eltype))))))))
-  (def v+ (bsp.vm-op:double+ identity)             (bsp.vm-op:unsigned+ identity))
-  (def v- (bsp.vm-op:double- bsp.vm-op:double-neg) (bsp.vm-op:unsigned- bsp.vm-op:unsigned-neg))
-  (def v* (bsp.vm-op:double* identity)             (bsp.vm-op:unsigned* identity))
-  (def v/ (bsp.vm-op:double/ bsp.vm-op:double-inv) (bsp.vm-op:unsigned/))
-  (def v% () (bsp.vm-op:unsigned%)))
+  (def bsp:+ (bsp.vm-op:double+ identity)             (bsp.vm-op:unsigned+ identity))
+  (def bsp:- (bsp.vm-op:double- bsp.vm-op:double-neg) (bsp.vm-op:unsigned- bsp.vm-op:unsigned-neg))
+  (def bsp:* (bsp.vm-op:double* identity)             (bsp.vm-op:unsigned* identity))
+  (def bsp:/ (bsp.vm-op:double/ bsp.vm-op:double-inv) (bsp.vm-op:unsigned/))
+  (def bsp:% () (bsp.vm-op:unsigned%)))
 
-(defun v~ (x)
+(defun bsp:~ (x)
   (vectorify x)
   (assert (equal (eltype-of x) '(unsigned-byte 32)))
   (make-op '(unsigned-byte 32) 'bsp.vm-op:unsigned-complement x))
@@ -52,17 +52,17 @@
                                   (make-op '(unsigned-byte 32) ',double-op x y))))
                         (t
                          (error "Don't know how to ~S vectors of ~S" ',name eltype)))))))
-  (def v=  bsp.vm-op:unsigned=  bsp.vm-op:double=)
-  (def v/= bsp.vm-op:unsigned/= bsp.vm-op:double/=)
-  (def v<  bsp.vm-op:unsigned<  bsp.vm-op:double<)
-  (def v<= bsp.vm-op:unsigned<= bsp.vm-op:double<=)
-  (def v>  bsp.vm-op:unsigned<  bsp.vm-op:double>)
-  (def v>= bsp.vm-op:unsigned>= bsp.vm-op:double>=)
-  (def vand bsp.vm-op:unsigned-and)
-  (def vor  bsp.vm-op:unsigned-or)
-  (def vxor bsp.vm-op:unsigned-xor)
-  (def vmax bsp.vm-op:unsigned-max bsp.vm-op:double-max)
-  (def vmin bsp.vm-op:unsigned-min bsp.vm-op:double-min))
+  (def bsp:=  bsp.vm-op:unsigned=  bsp.vm-op:double=)
+  (def bsp:/= bsp.vm-op:unsigned/= bsp.vm-op:double/=)
+  (def bsp:<  bsp.vm-op:unsigned<  bsp.vm-op:double<)
+  (def bsp:<= bsp.vm-op:unsigned<= bsp.vm-op:double<=)
+  (def bsp:>  bsp.vm-op:unsigned<  bsp.vm-op:double>)
+  (def bsp:>= bsp.vm-op:unsigned>= bsp.vm-op:double>=)
+  (def bsp:and bsp.vm-op:unsigned-and)
+  (def bsp:or  bsp.vm-op:unsigned-or)
+  (def bsp:xor bsp.vm-op:unsigned-xor)
+  (def bsp:max bsp.vm-op:unsigned-max bsp.vm-op:double-max)
+  (def bsp:min bsp.vm-op:unsigned-min bsp.vm-op:double-min))
 
 (defclass reducer (bsp.compiler:reducer)
   (value))
@@ -70,7 +70,7 @@
 (defmethod set-reducer-value ((reducer reducer) value)
   (setf (slot-value reducer 'value) value))
 
-(defmethod value ((reducer reducer))
+(defmethod bsp:value ((reducer reducer))
   (unless (slot-boundp reducer 'value)
     (%barrier *context* '() (vector reducer)))
   (slot-value reducer 'value))
@@ -79,7 +79,7 @@
                      vector-reducer 2arg-reducer 1arg-reducer)
   (let* ((args (coerce args 'simple-vector))
          (sources (remove-if-not (lambda (x)
-                                   (typep x 'bsp-vector))
+                                   (typep x 'bsp:vector))
                                  args))
          (stack
            (reduce (lambda (x y)
@@ -92,7 +92,7 @@
                       stack
                       (mask-stack-of source)))
                    sources))
-    (let* ((dst (make-instance 'bsp-vector
+    (let* ((dst (make-instance 'bsp:vector
                                :eltype eltype
                                :initial-element initial-element
                                :mask   (car *mask-stack*)
@@ -112,7 +112,8 @@
 
 (macrolet ((def (name op (unsigned-op unsigned-neutral)
                          (&optional double-op double-neutral)
-                 &aux (%name (intern (format nil "%~A" name))))
+                 &aux (%name (intern (format nil "%~A" name)
+                              "BSP")))
              `(progn
                 (defun ,%name (x)
                   (vectorify x)
@@ -192,13 +193,13 @@
                           (t
                            (error "Don't know how to ~S vectors of ~S" ',name eltype)))))
                 (defun ,name (x)
-                  (value (,%name x))))))
-  (def v/+ + (bsp.vm-op:unsigned/+ 0) (bsp.vm-op:double/+ 0d0))
-  (def v/* * (bsp.vm-op:unsigned/* 1) (bsp.vm-op:double/* 1d0))
-  (def v/min min (bsp.vm-op:unsigned/min (ldb (byte 32 0) -1))
+                  (v:value (,%name x))))))
+  (def bsp:/+ + (bsp.vm-op:unsigned/+ 0) (bsp.vm-op:double/+ 0d0))
+  (def bsp:/* * (bsp.vm-op:unsigned/* 1) (bsp.vm-op:double/* 1d0))
+  (def bsp:/min min (bsp.vm-op:unsigned/min (ldb (byte 32 0) -1))
                  (bsp.vm-op:double/min   sb-ext:double-float-positive-infinity))
-  (def v/max max (bsp.vm-op:unsigned/min 0)
+  (def bsp:/max max (bsp.vm-op:unsigned/min 0)
                  (bsp.vm-op:double/min   sb-ext:double-float-negative-infinity))
-  (def v/or  logior (bsp.vm-op:unsigned/or  0) ())
-  (def v/and logand (bsp.vm-op:unsigned/and 0) ())
-  (def v/xor logxor (bsp.vm-op:unsigned/xor 0) ()))
+  (def bsp:/or  logior (bsp.vm-op:unsigned/or  0) ())
+  (def bsp:/and logand (bsp.vm-op:unsigned/and 0) ())
+  (def bsp:/xor logxor (bsp.vm-op:unsigned/xor 0) ()))

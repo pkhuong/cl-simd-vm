@@ -1,29 +1,29 @@
+(defpackage "BSP"
+  (:use)
+  (:export "VECTOR" "VALUE" "LET" "WITH-CONTEXT" "COUNT"
+           "BARRIER"
+           "IF" "+" "-" "*" "/" "%"
+           "~"
+           "=" "/=" "<" ">" "<=" ">=" "AND" "OR" "XOR" "MAX" "MIN"
+
+           "/+" "/*" "/MIN" "/MAX" "/OR" "/AND" "/XOR"
+           "%/+" "%/*" "%/MIN" "%/MAX" "%/OR" "%/AND" "%/XOR")
+  (:nicknames "V"))
+
 (defpackage "BSP.FRONT"
   (:use "CL")
   (:import-from "BSP.COMPILER" "ELTYPE-OF" "DATA-OF" "SET-REDUCER-VALUE")
-  (:export "BSP-VECTOR" "ELTYPE-OF" "DATA-OF" "VALUE"
+  (:export "ELTYPE-OF" "DATA-OF"
            "MAKE-VECTOR" "MAKE-CONSTANT" "MAKE-OP"
-           "REDUCER" "MAKE-REDUCER" "SET-REDUCER-VALUE"
-           
-           "VLET"
-           "WITH-BSP-CONTEXT" "*CONTEXT*" "*DEFAULT-CHUNK-SIZE*" "COUNT-OF"
-           "BARRIER"
-
-           "VIF"
-           "V+" "V-" "V*" "V/" "V%"
-           "V~"
-           "V=" "V/=" "V<" "V<=" "V>" "V>=" "VAND" "VOR" "VXOR" "VMAX" "VMIN"
-
-           "V/+" "V/*" "V/MIN" "V/MAX" "V/OR" "V/AND" "V/XOR"
-           "%V/+" "%V/*" "%V/MIN" "%V/MAX" "%V/OR" "%V/AND" "%V/XOR"))
+           "REDUCER" "MAKE-REDUCER" "SET-REDUCER-VALUE"))
 
 (in-package "BSP.FRONT")
 
-(defgeneric value (x))
+(defgeneric bsp:value (x))
 
-(defclass bsp-vector (bsp.compiler:vec)
+(defclass bsp:vector (bsp.compiler:vec)
   ((data    :initarg :data    :initform nil :accessor data-of)
-   (mask    :initarg :mask    :initform nil :reader mask-of :type (or null cons bsp-vector))
+   (mask    :initarg :mask    :initform nil :reader mask-of :type (or null cons bsp:vector))
    (mask-stack :initarg :mask-stack :initform nil :reader mask-stack-of)))
 
 (defun has-root (stack root)
@@ -34,9 +34,9 @@
 ;; Roots: dx list of mutable cells to potentially-accessible
 ;; vector or reduce values
 (defvar *roots* '())
-(defmacro vlet ((&rest args) &body body)
+(defmacro bsp:let ((&rest args) &body body)
   (unless args
-    (return-from vlet `(locally ,@body)))
+    (return-from bsp:let `(locally ,@body)))
   (let* ((args (mapcar (lambda (x)
                          (if (consp x)
                              x
@@ -69,16 +69,18 @@
 (declaim (type list *mask-stack*))
 (defvar *mask-stack* '())
 
+(define-symbol-macro bsp:count (count-of *context*))
+
 (defun make-constant (eltype value)
   (let ((table (intern-table-of *context*))
         (key   (cons eltype value)))
     (or (gethash key table)
         (setf (gethash key table)
-              (make-instance 'bsp-vector
+              (make-instance 'bsp:vector
                              :eltype eltype
                              :initial-element value)))))
 
-(defmacro with-bsp-context ((count &optional (chunk-size '*default-chunk-size*))
+(defmacro bsp:with-context ((count &optional (chunk-size '*default-chunk-size*))
                             &body body)
   `(let* ((*context* (make-instance 'bsp-context
                                     :count ,count
@@ -93,12 +95,12 @@
   (let ((table (intern-table-of *context*)))
     (or (gethash source table)
         (setf (gethash source table)
-              (make-instance 'bsp-vector
+              (make-instance 'bsp:vector
                              :eltype  (array-element-type source)
                              :data    source)))))
 
 (defun %make-op (eltype fun &rest args)
-  (let* ((dst (make-instance 'bsp-vector
+  (let* ((dst (make-instance 'bsp:vector
                              :eltype eltype
                              :mask   (car *mask-stack*)
                              :mask-stack *mask-stack*))
@@ -116,7 +118,7 @@
 
 (defun make-op (eltype fun &rest args)
   (assert (every (lambda (arg)
-                   (or (not (typep arg 'bsp-vector))
+                   (or (not (typep arg 'bsp:vector))
                        (has-root *mask-stack* (mask-stack-of arg))))
                  args))
   (apply '%make-op eltype fun args))
@@ -140,7 +142,7 @@
            condition))
 
 (defun call-with-mask (condition then-thunk else-thunk)
-  (unless (typep condition 'bsp-vector)
+  (unless (typep condition 'bsp:vector)
     (return-from call-with-mask (funcall (if condition then-thunk else-thunk))))
   (assert (equal (eltype-of condition) '(unsigned-byte 32)))
   (assert (has-root *mask-stack* (mask-stack-of condition)))
@@ -171,7 +173,7 @@
 (defmacro vectorify (place)
   `(setf ,place (%vectorify ,place)))
 
-(defmacro vif (condition then &optional else)
+(defmacro bsp:if (condition then &optional else)
   `(call-with-mask (%vectorify ,condition)
                    (lambda () ,then)
                    (lambda () ,else)))
@@ -191,12 +193,12 @@
     (values (bsp.vm:execute-bblock bblock)
             (coerce new-roots 'simple-vector))))
 
-(defun barrier ()
+(defun bsp:barrier ()
   (%barrier *context* '() #())
   (values))
 
-(defmethod value ((vector bsp-vector))
+(defmethod bsp:value ((vector bsp:vector))
   (or (data-of vector)
       (progn
-        (barrier)
+        (bsp:barrier)
         (data-of vector))))
