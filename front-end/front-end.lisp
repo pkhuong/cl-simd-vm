@@ -159,7 +159,9 @@
                                     *mask-stack*)))
             (multiple-value-list (funcall else-thunk)))))
     (values-list (mapcar (lambda (then else)
-                           (vmerge condition then else))
+                           (vmerge condition
+                                   (%vectorify then)
+                                   (%vectorify else)))
                          then else))))
 
 (defun %vectorify (x)
@@ -200,5 +202,5 @@
 (defmethod bsp:value ((vector bsp:vector))
   (or (data-of vector)
       (progn
-        (bsp:barrier)
+        (%barrier *context* (list vector) #())
         (data-of vector))))
