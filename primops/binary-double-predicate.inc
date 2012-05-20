@@ -50,7 +50,7 @@ void NAME (void ** values, unsigned * properties,
 
                 for (unsigned ii = 0; ii+4 <= packed_size; ii+=4)
                         for (unsigned j = 0; j < 4; j++)
-                                BODY(i+j);
+                                BODY(ii+j);
                 for (unsigned ii = (packed_size&(-4U)); ii < packed_size; ii++)
                         BODY(ii);
 #undef BODY

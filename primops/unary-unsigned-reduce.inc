@@ -39,15 +39,15 @@ void NAME (void ** values, unsigned * properties,
                                 acc0 = OP(acc0, x);
                         }
                         {
-                                v4u x = psrc[i];
+                                v4u x = psrc[i+1];
                                 acc1 = OP(acc1, x);
                         }
                         {
-                                v4u x = psrc[i];
+                                v4u x = psrc[i+2];
                                 acc2 = OP(acc2, x);
                         }
                         {
-                                v4u x = psrc[i];
+                                v4u x = psrc[i+3];
                                 acc3 = OP(acc3, x);
                         }
                 }

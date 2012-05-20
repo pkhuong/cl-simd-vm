@@ -190,7 +190,7 @@ void merge32 (void ** values, unsigned * properties,
         {
                 unsigned packed_size = size/4;
                 v4u * restrict pmask = (v4u*)mask;
-                v4u * restrict psel  = (v4u*)mask;
+                v4u * restrict psel  = (v4u*)select;
                 v4u * restrict pdst  = (v4u*)dst;
                 v4u * restrict px    = (v4u*)x;
                 v4u * restrict py    = (v4u*)y;
