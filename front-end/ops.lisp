@@ -155,7 +155,9 @@
                                               (loop for i from 1 below 8 do
                                                 (setf acc (,op acc (sb-sys:sap-ref-32 src (* 4 i)))))
                                               (if (eql eltype 'bsp:bool)
-                                                  (not (zerop acc))
+                                                  ,(if (eql boolean-op 'flip-sign)
+                                                       `(ldb (byte 32 0) (- acc))
+                                                       `(not (zerop acc)))
                                                   acc)))))))
                       ,@(and double-op
                          `((bsp:double
@@ -195,7 +197,7 @@
                       (t (error "Don't know how to ~S vectors of ~S" ',name eltype)))))
                 (defun ,name (x)
                   (v:value (,%name x))))))
-  (def bsp:/+ + (bsp.vm-op:unsigned/+ 0) (bsp.vm-op:double/+ 0d0))
+  (def bsp:/+ + (bsp.vm-op:unsigned/+ 0 flip-sign) (bsp.vm-op:double/+ 0d0))
   (def bsp:/* * (bsp.vm-op:unsigned/* 1) (bsp.vm-op:double/* 1d0))
   (def bsp:/min min (bsp.vm-op:unsigned/min (ldb (byte 32 0) -1) t)
                  (bsp.vm-op:double/min   sb-ext:double-float-positive-infinity))
