@@ -13,13 +13,13 @@
   (:nicknames "V"))
 (in-package "BSP")
 
-(defconstant bsp:double 'bsp:double)
-(deftype bsp:double () 'double-float)
+(cl:defconstant bsp:double 'bsp:double)
+(cl:deftype bsp:double () 'cl:double-float)
 
-(defconstant bsp:bool 'bsp:bool)
-(deftype bsp:bool () '(unsigned-byte 32))
+(cl:defconstant bsp:bool 'bsp:bool)
+(cl:deftype bsp:bool () '(cl:unsigned-byte 32))
 
-(defconstant bsp:u32 'bsp:u32)
-(deftype bsp:u32 () '(unsigned-byte 32))
+(cl:defconstant bsp:u32 'bsp:u32)
+(cl:deftype bsp:u32 () '(cl:unsigned-byte 32))
 
-(defgeneric bsp:value (x))
+(cl:defgeneric bsp:value (x))
