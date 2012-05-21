@@ -53,12 +53,12 @@
                           (make-op ,(if test-p 'bsp:bool 'eltype) ',double-op x y))))
                     (t
                      (error "Don't know how to ~S vectors of ~S" ',name eltype)))))))
-  (def bsp:=  bsp.vm-op:unsigned=  bsp.vm-op:double=)
-  (def bsp:/= bsp.vm-op:unsigned/= bsp.vm-op:double/=)
-  (def bsp:<  bsp.vm-op:unsigned<  bsp.vm-op:double<)
-  (def bsp:<= bsp.vm-op:unsigned<= bsp.vm-op:double<=)
-  (def bsp:>  bsp.vm-op:unsigned<  bsp.vm-op:double>)
-  (def bsp:>= bsp.vm-op:unsigned>= bsp.vm-op:double>=)
+  (def bsp:=  bsp.vm-op:unsigned=  bsp.vm-op:double=  t)
+  (def bsp:/= bsp.vm-op:unsigned/= bsp.vm-op:double/= t)
+  (def bsp:<  bsp.vm-op:unsigned<  bsp.vm-op:double<  t)
+  (def bsp:<= bsp.vm-op:unsigned<= bsp.vm-op:double<= t)
+  (def bsp:>  bsp.vm-op:unsigned<  bsp.vm-op:double>  t)
+  (def bsp:>= bsp.vm-op:unsigned>= bsp.vm-op:double>= t)
   (def bsp:and bsp.vm-op:unsigned-and nil t)
   (def bsp:or  bsp.vm-op:unsigned-or  nil t)
   (def bsp:xor bsp.vm-op:unsigned-xor nil t)
@@ -152,8 +152,12 @@
                                                              mask flip-p src))
                                             (let* ((src (sb-sys:int-sap (aref vec dst)))
                                                    (acc (sb-sys:sap-ref-32 src 0)))
+                                              (declare (type (unsigned-byte 32) acc))
                                               (loop for i from 1 below 8 do
-                                                (setf acc (,op acc (sb-sys:sap-ref-32 src (* 4 i)))))
+                                                (setf acc (ldb (byte 32 0)
+                                                               (,op acc
+                                                                    (sb-sys:sap-ref-32
+                                                                     src (* 4 i))))))
                                               (if (eql eltype 'bsp:bool)
                                                   ,(if (eql boolean-op 'flip-sign)
                                                        `(ldb (byte 32 0) (- acc))
@@ -191,6 +195,7 @@
                                                              mask flip-p src))
                                             (let* ((src (sb-sys:int-sap (aref vec dst)))
                                                    (acc (sb-sys:sap-ref-double src 0)))
+                                              (declare (type double-float acc))
                                               (loop for i from 1 below 4 do
                                                 (setf acc (,op acc (sb-sys:sap-ref-double src (* 8 i)))))
                                               acc))))))
