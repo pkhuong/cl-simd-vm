@@ -65,14 +65,22 @@
                              :eltype eltype
                              :initial-element value)))))
 
+(declaim (inline countify))
+(defun countify (x)
+  (etypecase x
+    (sequence (length x))
+    (unsigned-byte x)))
+
 (defmacro bsp:with-context ((count &optional (chunk-size '*default-chunk-size*))
                             &body body)
-  `(let* ((*context* (make-instance 'bsp-context
-                                    :count ,count
-                                    :chunk ,chunk-size))
-          (*mask-stack* (list (make-constant bsp:bool
-                                             (ldb (byte 32 0) -1)))))
-     ,@body))
+  (let ((_count (gensym "COUNT")))
+    `(let* ((*context* (let ((,_count (countify ,count)))
+                         (make-instance 'bsp-context
+                                        :count ,_count
+                                        :chunk (min ,_count ,chunk-size))))
+            (*mask-stack* (list (make-constant bsp:bool
+                                               (ldb (byte 32 0) -1)))))
+       ,@body)))
 
 (defun make-vector (source)
   (declare (type (simple-array * 1) source))
