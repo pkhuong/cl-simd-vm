@@ -6,17 +6,6 @@
            "REDUCER" "MAKE-REDUCER" "SET-REDUCER-VALUE"))
 
 (in-package "BSP.FRONT")
-(defconstant bsp:double 'bsp:double)
-(deftype bsp:double () 'double-float)
-
-(defconstant bsp:bool 'bsp:bool)
-(deftype bsp:bool () '(unsigned-byte 32))
-
-(defconstant bsp:u32 'bsp:u32)
-(deftype bsp:u32 () '(unsigned-byte 32))
-
-(defgeneric bsp:value (x))
-
 (defclass bsp:vector (bsp.compiler:vec)
   ((data    :initarg :data    :initform nil :accessor data-of)
    (mask    :initarg :mask    :initform nil :reader mask-of :type (or null cons bsp:vector))
