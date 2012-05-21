@@ -131,7 +131,10 @@ Operations
 
 Three element types are supported: double floats (`bsp:double`),
 32-bit unsigneds (`bsp:u32`) and booleans (`bsp:bool`) represented as
-32 bit masks.
+32 bit masks.  All of these operations are dynamically typed (at the
+front-end) on homogeneous vectors.  Thus, all the dispatch happens
+while the expression graph is created, not during vectorised
+execution.
 
 Map operations
 --------------
