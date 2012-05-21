@@ -154,7 +154,9 @@
                                                    (acc (sb-sys:sap-ref-32 src 0)))
                                               (loop for i from 1 below 8 do
                                                 (setf acc (,op acc (sb-sys:sap-ref-32 src (* 4 i)))))
-                                              acc))))))
+                                              (if (eql eltype 'bsp:bool)
+                                                  (not (zerop acc))
+                                                  acc)))))))
                       ,@(and double-op
                          `((bsp:double
                             (make-reducer (vector x)
