@@ -24,7 +24,7 @@
                   (length (codegen-state-registers
                            *codegen-state*))
                   (and (or (rootp var)
-                           (data-of var))
+                           (not (var-op var)))
                        (lambda (&optional value)
                          (if value
                              (setf (data-of var) value)
