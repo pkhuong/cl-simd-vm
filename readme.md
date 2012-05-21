@@ -12,7 +12,8 @@ The goal of this project is four-folds:
  4. support large datasets via foreign (C) allocation, mmap-ed files,
  and a distributed master/slave architecture.
 
-Currently, only 1. and, to a certain, 3., are mostly implemented.  
+Currently, only 1. and, to a certain extent, 3., are mostly
+implemented.
 
 Using vectorised map and reduce
 ===============================
