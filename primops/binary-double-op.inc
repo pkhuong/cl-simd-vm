@@ -1,5 +1,3 @@
-#include <stdio.h>
-
 void NAME (void ** values, unsigned * properties,
            unsigned long start, unsigned size,
            unsigned mask_idx, int flipped,
